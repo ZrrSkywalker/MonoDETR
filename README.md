@@ -8,7 +8,7 @@ MonoDETR is the first DETR-based model for monocular 3D detection **without addi
 </div>
 
 ## Implementation
-We provide the checkpoints trained on KITTI *train* set with the performance on *val* set of Car AP<sub>R40</sub> as:
+We provide the checkpoints on KITTI *train* set with the performance on *val* set of Car AP<sub>R40</sub>:
 <table>
     <tr>
         <td div align="center"></td> 
