@@ -4,27 +4,35 @@ Official implementation of the paper ['MonoDETR: Depth-aware Transformer for Mon
 ## Introduction
 MonoDETR is the first DETR-based model for monocular 3D detection **without additional depth supervision, anchors or NMS**, which achieves leading performance on KITTI *val* and *test* set. Specifically, We enable the vanilla transformer to be depth-aware and enforce the whole detection process guided by depth. Specifically, we represent 3D object candidates as a set of queries and produce non-local depth embeddings of the input image by a lightweight depth predictor and an attention-based depth encoder. Then, we propose a depth-aware decoder to conduct both inter-query and query-scene depth feature communication. In this way, each object estimates its 3D attributes adaptively from the depth-informative regions on the image, not limited by center-around features.
 <div align="center">
-  <img src="pipeline.jpg"/ width="800px">
+  <img src="pipeline.jpg"/>
 </div>
 
-
-
-<table align="center">
+## Implementation
+We provide the checkpoints trained on KITTI *train* set with the performance on *val* set of Car AP<sub>R40</sub> as:
+<table>
     <tr>
-        <td colspan="3",div align="center">KITTI valset, Car @IoU=0.7, AP_R40</td>    
-    </tr>
-    <tr>
+        <td div align="center"></td> 
         <td div align="center">Easy</td> 
-        <td div align="center">Mod</td> 
+        <td div align="center">Mod.</td> 
         <td div align="center">Hard</td>  
     </tr>
     <tr>
-        <td div align="center">28.54%</td> 
-        <td div align="center">20.55%</td> 
+        <td div align="center">In the paper</td>
+        <td div align="center">26.66%</td> 
+        <td div align="center">20.14%</td> 
         <td div align="center">16.88%</td> 
+    </tr>
+    <tr>
+        <td div align="center">In this repo</td>
+        <td div align="center">28.92%</td> 
+        <td div align="center">20.74%</td> 
+        <td div align="center">17.20%</td> 
     </tr>
 </table>
 
 
-## Implementation
+## Installation
 Comming soon!
+
+## Acknowlegment
+This repo benefits from the excellent [MonoDLE](https://github.com/xinzhuma/monodle) and [GUPNet](https://github.com/SuperMHP/GUPNet).
