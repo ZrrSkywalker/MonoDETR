@@ -10,7 +10,6 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 ## Main Results
 The randomness of training for monocular detection would cause the variance of Â±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is under tuned)
 
-
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
@@ -43,6 +42,26 @@ The randomness of training for monocular detection would cause the variance of Â
         <td div align="center">20.08%</td> 
         <td div align="center">16.18%</td> 
     </tr> 
+</table>
+
+MonoDETR on *test* set from [KITTI benckmark](http://www.cvlibs.net/datasets/kitti/eval_object_detail.php?&result=22a0e176d4f7794e7c142c93f4f8891749aa738f) for the car category:
+<table>
+    <tr>
+        <td rowspan="2",div align="center">Models</td>
+        <td colspan="3",div align="center">Test, AP<sub>3D|R40</sub></td>   
+    </tr>
+    <tr>
+        <td div align="center">Easy</td> 
+        <td div align="center">Mod.</td> 
+        <td div align="center">Hard</td> 
+    </tr>
+    <tr>
+        <td rowspan="4",div align="center">MonoDETR</td>
+        <td div align="center">24.52%</td> 
+        <td div align="center">16.26%</td> 
+        <td div align="center">13.93%</td> 
+    </tr>  
+    
 </table>
 
 
@@ -99,7 +118,7 @@ The best checkpoint will be evaluated as default. You can change it at "tester/c
 
 
 ## Acknowlegment
-This repo benefits from the excellent [Deformable DETR](https://github.com/fundamentalvision/Deformable-DETR) and [MonoDLE](https://github.com/xinzhuma/monodle).
+This repo benefits from the excellent [Deformable-DETR](https://github.com/fundamentalvision/Deformable-DETR) and [MonoDLE](https://github.com/xinzhuma/monodle).
 
 ## Citation
 ```bash
