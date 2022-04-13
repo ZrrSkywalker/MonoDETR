@@ -8,7 +8,7 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 </div>
 
 ## Main Results
-The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (will be completed soon)
+The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is under tuned)
 
 
 <table>
@@ -69,7 +69,7 @@ The randomness of training for monocular detection would cause the variance of �
     bash make.sh
     ```
     
-4. Make dictionary for saving training logs:
+4. Make dictionary for saving training losses:
     ```
     mkdir logs
     ```
