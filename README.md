@@ -8,7 +8,7 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 </div>
 
 ## Main Results
-The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is under tuned)
+The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is still under tuned)
 
 <table>
     <tr>
@@ -86,6 +86,8 @@ MonoDETR on *test* set from [KITTI benckmark](http://www.cvlibs.net/datasets/kit
 
     cd lib/models/monodetr/ops/
     bash make.sh
+    
+    cd ../../../..
     ```
     
 4. Make dictionary for saving training losses:
@@ -103,11 +105,12 @@ MonoDETR on *test* set from [KITTI benckmark](http://www.cvlibs.net/datasets/kit
     │   ├──testing/
     ├──...
     ```
+    You can also change the data path at "dataset/root_dir" in `configs/monodetr.yaml`.
     
 ## Get Started
 
 ### Train
-You can modify the settings of model and training in `configs/monodetr.yaml` and appoint the GPU in `train.sh`:
+You can modify the settings of models and training in `configs/monodetr.yaml` and appoint the GPU in `train.sh`:
 
     bash train.sh configs/monodetr.yaml > logs/monodetr.log
    
