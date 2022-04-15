@@ -48,7 +48,7 @@ The randomness of training for monocular detection would cause the variance of Â
     </tr> 
 </table>
 
-MonoDETR on *test* set from [KITTI benckmark](http://www.cvlibs.net/datasets/kitti/eval_object_detail.php?&result=22a0e176d4f7794e7c142c93f4f8891749aa738f) for the car category:
+MonoDETR on *test* set from official [KITTI benckmark](http://www.cvlibs.net/datasets/kitti/eval_object_detail.php?&result=22a0e176d4f7794e7c142c93f4f8891749aa738f) for the car category:
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
