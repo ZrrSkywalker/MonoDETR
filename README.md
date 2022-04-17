@@ -66,9 +66,9 @@ MonoDETR on *test* set from official [KITTI benckmark](http://www.cvlibs.net/dat
         <td div align="center">13.93%</td> 
     </tr>  
     <tr>
-        <td div align="center">24.90%</td> 
-        <td div align="center">16.34%</td> 
-        <td div align="center">13.47%</td> 
+        <td div align="center">25.00%</td> 
+        <td div align="center">16.47%</td> 
+        <td div align="center">13.58%</td> 
     </tr>  
     
 </table>
