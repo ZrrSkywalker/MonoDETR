@@ -60,10 +60,15 @@ MonoDETR on *test* set from official [KITTI benckmark](http://www.cvlibs.net/dat
         <td div align="center">Hard</td> 
     </tr>
     <tr>
-        <td rowspan="4",div align="center">MonoDETR</td>
+        <td rowspan="2",div align="center">MonoDETR</td>
         <td div align="center">24.52%</td> 
         <td div align="center">16.26%</td> 
         <td div align="center">13.93%</td> 
+    </tr>  
+    <tr>
+        <td div align="center">24.90%</td> 
+        <td div align="center">16.34%</td> 
+        <td div align="center">13.47%</td> 
     </tr>  
     
 </table>
