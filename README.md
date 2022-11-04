@@ -15,6 +15,7 @@ The randomness of training for monocular detection would cause the variance of Â
         <td rowspan="2",div align="center">Models</td>
         <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>   
         <td rowspan="2",div align="center">Logs</td>
+        <td rowspan="2",div align="center">Ckpts</td>
     </tr>
     <tr>
         <td div align="center">Easy</td> 
@@ -27,24 +28,28 @@ The randomness of training for monocular detection would cause the variance of Â
         <td div align="center">20.61%</td> 
         <td div align="center">16.38%</td> 
         <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">ckpt</a></td>
     </tr>  
     <tr>
         <td div align="center">26.66%</td> 
         <td div align="center">20.14%</td> 
         <td div align="center">16.88%</td> 
         <td div align="center"><a href="https://drive.google.com/file/d/1gSof60oOnno_qAHRViXKQ6CyqRI7O0tr/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">ckpt</a></td>
     </tr> 
     <tr>
         <td div align="center">29.53%</td> 
         <td div align="center">20.13%</td> 
         <td div align="center">16.57%</td> 
         <td div align="center"><a href="https://drive.google.com/file/d/1rrayzzwHGpddE1f_mfvq0RQb5xpWcPAL/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">ckpt</a></td>
     </tr> 
     <tr>
         <td div align="center">27.11%</td> 
         <td div align="center">20.08%</td> 
         <td div align="center">16.18%</td> 
         <td div align="center"><a href="https://drive.google.com/file/d/1D6IOkscfypGSEbsXcHZ60-q492zvMLp7/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">ckpt</a></td>
     </tr> 
 </table>
 
