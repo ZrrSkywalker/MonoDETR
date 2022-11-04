@@ -10,6 +10,8 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 ## Main Results
 The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is still under tuned)
 
+**We have relased the ckpts of our implementation for reproducibility. The module names might have some mismatch, which will be rectified in a few days.**
+
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
