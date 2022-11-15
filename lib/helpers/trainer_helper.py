@@ -61,7 +61,7 @@ class Trainer(object):
                 logger=self.logger)
             self.lr_scheduler.last_epoch = self.epoch - 1
             self.logger.info("Loading Checkpoint... Best Result:{}, Best Epoch:{}".format(self.best_result, self.best_epoch))
-        
+
     def train(self):
         start_epoch = self.epoch
 
@@ -117,7 +117,7 @@ class Trainer(object):
         self.model.train()
         print(">>>>>>> Epoch:", str(epoch) + ":")
 
-        progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch+1 == self.cfg['max_epoch']), desc='iters')
+        progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch + 1 == self.cfg['max_epoch']), desc='iters')
         for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
             inputs = inputs.to(self.device)
             calibs = calibs.to(self.device)
@@ -125,7 +125,7 @@ class Trainer(object):
                 targets[key] = targets[key].to(self.device)
             img_sizes = targets['img_size']
             targets = self.prepare_targets(targets, inputs.shape[0])
-        
+
             # train one batch
             self.optimizer.zero_grad()
             outputs = self.model(inputs, calibs, targets, img_sizes)
@@ -148,7 +148,7 @@ class Trainer(object):
             flags = [True] * 5
             if batch_idx % 30 == 0:
                 print("----", batch_idx, "----")
-                print("%s: %.2f, " %("loss_detr", detr_losses_dict_log["loss_detr"]))
+                print("%s: %.2f, " % ("loss_detr", detr_losses_dict_log["loss_detr"]))
                 for key, val in detr_losses_dict_log.items():
                     if key == "loss_detr":
                         continue
@@ -156,7 +156,7 @@ class Trainer(object):
                         if flags[int(key[-1])]:
                             print("")
                             flags[int(key[-1])] = False
-                    print("%s: %.2f, " %(key, val), end="")
+                    print("%s: %.2f, " % (key, val), end="")
                 print("")
                 print("")
 
@@ -178,4 +178,3 @@ class Trainer(object):
                     target_dict[key] = val[bz][mask[bz]]
             targets_list.append(target_dict)
         return targets_list
-
