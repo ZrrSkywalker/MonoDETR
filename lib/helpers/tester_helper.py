@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Tuple
 import tqdm
 import shutil
 
@@ -129,8 +130,8 @@ class Tester(object):
                 f.write('\n')
             f.close()
 
-    def evaluate(self):
+    def evaluate(self) -> Tuple[Dict[str, float], float]:
         results_dir = os.path.join(self.output_dir, 'outputs', 'data')
         assert os.path.exists(results_dir)
-        result = self.dataloader.dataset.eval(results_dir=results_dir, logger=self.logger)
-        return result
+        result_dict, car_moderate = self.dataloader.dataset.eval(results_dir=results_dir, logger=self.logger)
+        return result_dict, car_moderate

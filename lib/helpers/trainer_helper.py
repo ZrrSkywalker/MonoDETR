@@ -4,6 +4,7 @@ import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 
 from lib.helpers.save_helper import get_checkpoint_state
 from lib.helpers.save_helper import load_checkpoint
@@ -23,7 +24,8 @@ class Trainer(object):
                  warmup_lr_scheduler,
                  logger,
                  loss,
-                 model_name):
+                 model_name,
+                 with_tensorboard: bool = True):
         self.cfg = cfg
         self.model = model
         self.optimizer = optimizer
@@ -40,6 +42,9 @@ class Trainer(object):
         self.model_name = model_name
         self.output_dir = os.path.join('./' + cfg['save_path'], model_name)
         self.tester = None
+        self.with_tensorboard = with_tensorboard
+        if with_tensorboard:
+            self.writer = SummaryWriter(self.output_dir)
 
         # loading pretrain/resume model
         if cfg.get('pretrain_model'):
@@ -79,8 +84,12 @@ class Trainer(object):
             # update learning rate
             if self.warmup_lr_scheduler is not None and epoch < 5:
                 self.warmup_lr_scheduler.step()
+                if self.with_tensorboard:
+                    self.writer.add_scalar('learning_rate', self.warmup_lr_scheduler.get_lr())
             else:
                 self.lr_scheduler.step()
+                if self.with_tensorboard:
+                    self.writer.add_scalar('learning_rate', self.lr_scheduler.get_lr())
 
             # save trained model
             if (self.epoch % self.cfg['save_frequency']) == 0:
@@ -96,7 +105,7 @@ class Trainer(object):
                 if self.tester is not None:
                     self.logger.info("Test Epoch {}".format(self.epoch))
                     self.tester.inference()
-                    cur_result = self.tester.evaluate()
+                    result_dict, cur_result = self.tester.evaluate()
                     if cur_result > best_result:
                         best_result = cur_result
                         best_epoch = self.epoch
@@ -104,8 +113,10 @@ class Trainer(object):
                         save_checkpoint(
                             get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
                             ckpt_name)
-                    self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
-
+                    self.logger.info("Best Result: {}, epoch: {}".format(best_result, best_epoch))
+                    if self.with_tensorboard:
+                        for key, value in result_dict.items():
+                            self.writer.add_scalar(f'val/{key}', value, global_step=epoch)
             progress_bar.update()
 
         self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
@@ -159,6 +170,13 @@ class Trainer(object):
                     print("%s: %.2f, " % (key, val), end="")
                 print("")
                 print("")
+
+                if self.with_tensorboard:
+                    for key, value in detr_losses_dict_log.items():
+                        self.writer.add_scalar(
+                            f'train/{key}',
+                            value,
+                            global_step=epoch * len(self.train_loader) + batch_idx)
 
             detr_losses.backward()
             self.optimizer.step()

@@ -9,8 +9,8 @@ import copy
 
 from utils import box_ops
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list,
-                            accuracy, get_world_size, interpolate,
-                            is_dist_avail_and_initialized, inverse_sigmoid)
+                        accuracy, get_world_size, interpolate,
+                        is_dist_avail_and_initialized, inverse_sigmoid)
 
 from .backbone import build_backbone
 from .matcher import build_matcher
@@ -26,6 +26,7 @@ def _get_clones(module, N):
 
 class MonoDETR(nn.Module):
     """ This is the MonoDETR module that performs monocualr 3D object detection """
+
     def __init__(self, backbone, depthaware_transformer, depth_predictor, num_classes, num_queries, num_feature_levels,
                  aux_loss=True, with_box_refine=False, two_stage=False, init_box=False):
         """ Initializes the model.
@@ -40,7 +41,7 @@ class MonoDETR(nn.Module):
             two_stage: two-stage MonoDETR
         """
         super().__init__()
- 
+
         self.num_queries = num_queries
         self.depthaware_transformer = depthaware_transformer
         self.depth_predictor = depth_predictor
@@ -58,7 +59,7 @@ class MonoDETR(nn.Module):
         self.angle_embed = MLP(hidden_dim, hidden_dim, 24, 2)
         self.depth_embed = MLP(hidden_dim, hidden_dim, 2, 2)  # depth and deviation
 
-        if init_box == True:
+        if init_box:
             nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data, 0)
 
@@ -87,7 +88,7 @@ class MonoDETR(nn.Module):
                     nn.Conv2d(backbone.num_channels[0], hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, hidden_dim),
                 )])
-        
+
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.with_box_refine = with_box_refine
@@ -106,7 +107,7 @@ class MonoDETR(nn.Module):
             # hack implementation for iterative bounding box refinement
             self.depthaware_transformer.decoder.bbox_embed = self.bbox_embed
             self.dim_embed_3d = _get_clones(self.dim_embed_3d, num_pred)
-            self.depthaware_transformer.decoder.dim_embed = self.dim_embed_3d  
+            self.depthaware_transformer.decoder.dim_embed = self.dim_embed_3d
             self.angle_embed = _get_clones(self.angle_embed, num_pred)
             self.depth_embed = _get_clones(self.depth_embed, num_pred)
         else:
@@ -124,7 +125,6 @@ class MonoDETR(nn.Module):
             for box_embed in self.bbox_embed:
                 nn.init.constant_(box_embed.layers[-1].bias.data[2:], 0.0)
 
-
     def forward(self, images, calibs, targets, img_sizes):
         """ The forward expects a NestedTensor, which consists of:
                - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
@@ -135,19 +135,19 @@ class MonoDETR(nn.Module):
 
         srcs = []
         masks = []
-        for l, feat in enumerate(features):
+        for lvl, feat in enumerate(features):
             src, mask = feat.decompose()
-            srcs.append(self.input_proj[l](src))
+            srcs.append(self.input_proj[lvl](src))
             masks.append(mask)
             assert mask is not None
 
         if self.num_feature_levels > len(srcs):
             _len_srcs = len(srcs)
-            for l in range(_len_srcs, self.num_feature_levels):
-                if l == _len_srcs:
-                    src = self.input_proj[l](features[-1].tensors)
+            for lvl in range(_len_srcs, self.num_feature_levels):
+                if lvl == _len_srcs:
+                    src = self.input_proj[lvl](features[-1].tensors)
                 else:
-                    src = self.input_proj[l](srcs[-1])
+                    src = self.input_proj[lvl](srcs[-1])
                 m = torch.zeros(src.shape[0], src.shape[2], src.shape[3]).to(torch.bool).to(src.device)
                 mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
                 pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
@@ -215,7 +215,7 @@ class MonoDETR(nn.Module):
 
             # depth average + sigma
             depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3,
-                                    depth_reg[:, :, 1: 2]], -1)
+                                   depth_reg[:, :, 1: 2]], -1)
             outputs_depths.append(depth_ave)
 
             # angles
@@ -248,7 +248,7 @@ class MonoDETR(nn.Module):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        return [{'pred_logits': a, 'pred_boxes': b, 
+        return [{'pred_logits': a, 'pred_boxes': b,
                  'pred_3d_dim': c, 'pred_angle': d, 'pred_depth': e}
                 for a, b, c, d, e in zip(outputs_class[:-1], outputs_coord[:-1],
                                          outputs_3d_dim[:-1], outputs_angle[:-1], outputs_depth[:-1])]
@@ -260,6 +260,7 @@ class SetCriterion(nn.Module):
         1) we compute hungarian assignment between ground truth boxes and the outputs of the model
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
+
     def __init__(self, num_classes, matcher, weight_dict, focal_alpha, losses):
         """ Create the criterion.
         Parameters:
@@ -291,7 +292,7 @@ class SetCriterion(nn.Module):
 
         target_classes[idx] = target_classes_o.squeeze().long()
 
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]+1],
+        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
                                             dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device)
         target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
 
@@ -319,7 +320,7 @@ class SetCriterion(nn.Module):
         return losses
 
     def loss_3dcenter(self, outputs, targets, indices, num_boxes):
-        
+
         idx = self._get_src_permutation_idx(indices)
         src_3dcenter = outputs['pred_boxes'][:, :, 0: 2][idx]
         target_3dcenter = torch.cat([t['boxes_3d'][:, 0: 2][i] for t, (_, i) in zip(targets, indices)], dim=0)
@@ -330,7 +331,7 @@ class SetCriterion(nn.Module):
         return losses
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
-        
+
         assert 'pred_boxes' in outputs
         idx = self._get_src_permutation_idx(indices)
         src_2dboxes = outputs['pred_boxes'][:, :, 2: 6][idx]
@@ -350,19 +351,19 @@ class SetCriterion(nn.Module):
         losses['loss_giou'] = loss_giou.sum() / num_boxes
         return losses
 
-    def loss_depths(self, outputs, targets, indices, num_boxes):  
+    def loss_depths(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
         src_depths = outputs['pred_depth'][idx]
         target_depths = torch.cat([t['depth'][i] for t, (_, i) in zip(targets, indices)], dim=0).squeeze()
 
-        depth_input, depth_log_variance = src_depths[:, 0], src_depths[:, 1] 
-        depth_loss = 1.4142 * torch.exp(-depth_log_variance) * torch.abs(depth_input - target_depths) + depth_log_variance  
+        depth_input, depth_log_variance = src_depths[:, 0], src_depths[:, 1]
+        depth_loss = 1.4142 * torch.exp(-depth_log_variance) * torch.abs(depth_input - target_depths) + depth_log_variance
         losses = {}
-        losses['loss_depth'] = depth_loss.sum() / num_boxes 
-        return losses  
-    
-    def loss_dims(self, outputs, targets, indices, num_boxes):  
+        losses['loss_depth'] = depth_loss.sum() / num_boxes
+        return losses
+
+    def loss_dims(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
         src_dims = outputs['pred_3d_dim'][idx]
@@ -378,7 +379,7 @@ class SetCriterion(nn.Module):
         losses['loss_dim'] = dim_loss.sum() / num_boxes
         return losses
 
-    def loss_angles(self, outputs, targets, indices, num_boxes):  
+    def loss_angles(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
         heading_input = outputs['pred_angle'][idx]
@@ -398,10 +399,10 @@ class SetCriterion(nn.Module):
         cls_onehot = torch.zeros(heading_target_cls.shape[0], 12).cuda().scatter_(dim=1, index=heading_target_cls.view(-1, 1), value=1)
         heading_input_res = torch.sum(heading_input_res * cls_onehot, 1)
         reg_loss = F.l1_loss(heading_input_res, heading_target_res, reduction='none')
-        
+
         angle_loss = cls_loss + reg_loss
         losses = {}
-        losses['loss_angle'] = angle_loss.sum() / num_boxes 
+        losses['loss_angle'] = angle_loss.sum() / num_boxes
         return losses
 
     def loss_depth_map(self, outputs, targets, indices, num_boxes):
@@ -430,7 +431,7 @@ class SetCriterion(nn.Module):
         return batch_idx, tgt_idx
 
     def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
-        
+
         loss_map = {
             'labels': self.loss_labels,
             'cardinality': self.loss_cardinality,
@@ -453,7 +454,6 @@ class SetCriterion(nn.Module):
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
         outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
-        
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)
@@ -547,7 +547,7 @@ def build(cfg):
         weight_dict.update(aux_weight_dict)
 
     losses = ['labels', 'boxes', 'cardinality', 'depths', 'dims', 'angles', 'center', 'depth_map']
-    
+
     criterion = SetCriterion(
         cfg['num_classes'],
         matcher=matcher,
@@ -556,5 +556,5 @@ def build(cfg):
         losses=losses)
     device = torch.device(cfg['device'])
     criterion.to(device)
-    
+
     return model, criterion
