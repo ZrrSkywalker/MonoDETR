@@ -3,6 +3,7 @@ import os
 import pathlib
 import re
 from collections import OrderedDict
+from typing import Callable, List, Optional
 
 import numpy as np
 from skimage import io
@@ -291,7 +292,24 @@ def add_difficulty_to_annos(info):
     return diff
 
 
-def get_label_anno(label_path):
+def get_label_anno(label_path, filter_fn=Optional[Callable[[List[str]], bool]]):
+    """Processes a label file and returns.
+
+    Args:
+        label_path: The path to the label file.
+        filter_fn: A callable returning true if the data row is valid.
+    
+    Returns:
+        A dict of processed data rows with the following keys:
+        * 'name'
+        * 'truncated'
+        * 'occluded'
+        * 'alpha'
+        * 'bbox'
+        * 'dimensions'
+        * 'location'
+        * 'rotation_y'
+    """
     annotations = {}
     annotations.update({
         'name': [],
@@ -309,6 +327,8 @@ def get_label_anno(label_path):
     #     content = []
     # else:
     content = [line.strip().split(' ') for line in lines]
+    if filter_fn:
+        content = [x for x in content if filter_fn(x)]
     annotations['name'] = np.array([x[0] for x in content])
     annotations['truncated'] = np.array([float(x[1]) for x in content])
     annotations['occluded'] = np.array([int(x[2]) for x in content])
@@ -329,7 +349,7 @@ def get_label_anno(label_path):
         annotations['score'] = np.zeros([len(annotations['bbox'])])
     return annotations
 
-def get_label_annos(label_folder, image_ids=None):
+def get_label_annos(label_folder, image_ids=None, filter_fn=None):
     if image_ids is None:
         filepaths = pathlib.Path(label_folder).glob('*.txt')
         prog = re.compile(r'^\d{6}.txt$')
@@ -343,7 +363,7 @@ def get_label_annos(label_folder, image_ids=None):
     for idx in image_ids:
         image_idx = get_image_index_str(idx)
         label_filename = label_folder / (image_idx + '.txt')
-        annos.append(get_label_anno(label_filename))
+        annos.append(get_label_anno(label_filename, filter_fn=filter_fn))
     return annos
 
 def area(boxes, add1=False):

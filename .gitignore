@@ -1,0 +1,9 @@
+data/
+logs/
+runs/
+__pycache__/
+**/build/
+**/dist/
+lib/models/monodetr/ops/MultiScaleDeformableAttention.egg-info
+*.png
+*.csv

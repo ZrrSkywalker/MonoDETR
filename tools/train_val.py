@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import os
+from pathlib import Path
 import sys
 import torch
 
@@ -23,21 +24,17 @@ from lib.helpers.utils_helper import create_logger
 from lib.helpers.utils_helper import set_random_seed
 
 
-parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
-parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
-parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
-
-args = parser.parse_args()
-
-
-def main():
+def main(args):
     assert (os.path.exists(args.config))
-    cfg = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+    with open(args.config, 'r') as f:
+        cfg = yaml.load(f, Loader=yaml.Loader)
     set_random_seed(cfg.get('random_seed', 444))
 
     model_name = cfg['model_name']
     output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name)
     os.makedirs(output_path, exist_ok=True)
+    with open(os.path.join(output_path, args.config.name), 'w') as f:
+        yaml.dump(cfg, f)
 
     log_file = os.path.join(output_path, 'train.log.%s' % datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     logger = create_logger(log_file)
@@ -48,7 +45,7 @@ def main():
     # build model
     model, loss = build_model(cfg['model'])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    gpu_ids = list(map(int, cfg['trainer']['gpu_ids'].split(',')))
+    gpu_ids = list(map(int, args.gpu.split(',')))
 
     if len(gpu_ids) == 1:
         model = model.to(device)
@@ -109,4 +106,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
+    parser.add_argument('-c', '--config', type=Path, help='settings of detection in yaml format')
+    parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
+    parser.add_argument('-g', '--gpu', default='0')
+
+    args = parser.parse_args()
+
+    main(args)

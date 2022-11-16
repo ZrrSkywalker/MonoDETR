@@ -176,8 +176,8 @@ def image_box_overlap(boxes, query_boxes, criterion=-1):
                 if ih > 0:
                     if criterion == -1:
                         ua = (
-                                (boxes[n, 2] - boxes[n, 0]) *
-                                (boxes[n, 3] - boxes[n, 1]) + qbox_area - iw * ih)
+                            (boxes[n, 2] - boxes[n, 0]) *
+                            (boxes[n, 3] - boxes[n, 1]) + qbox_area - iw * ih)
                     elif criterion == 0:
                         ua = ((boxes[n, 2] - boxes[n, 0]) *
                               (boxes[n, 3] - boxes[n, 1]))
@@ -383,7 +383,7 @@ def fused_compute_statistics(overlaps,
     for i in range(gt_nums.shape[0]):
         for t, thresh in enumerate(thresholds):
             overlap = overlaps[dt_num:dt_num + dt_nums[i], gt_num:
-                                                           gt_num + gt_nums[i]]
+                               gt_num + gt_nums[i]]
 
             gt_data = gt_datas[gt_num:gt_num + gt_nums[i]]
             dt_data = dt_datas[dt_num:dt_num + dt_nums[i]]
@@ -481,7 +481,7 @@ def calculate_iou_partly(gt_annos, dt_annos, metric, num_parts=50):
             dt_box_num = total_dt_num[example_idx + i]
             overlaps.append(
                 parted_overlaps[j][gt_num_idx:gt_num_idx + gt_box_num,
-                dt_num_idx:dt_num_idx + dt_box_num])
+                                   dt_num_idx:dt_num_idx + dt_box_num])
             gt_num_idx += gt_box_num
             dt_num_idx += dt_box_num
         example_idx += num_part

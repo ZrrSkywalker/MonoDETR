@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Tuple
 import numpy as np
 import torch.utils.data as data
 from PIL import Image, ImageFile
@@ -17,7 +18,6 @@ from lib.datasets.kitti.kitti_eval_python.eval import get_distance_eval_result
 import lib.datasets.kitti.kitti_eval_python.kitti_common as kitti
 import copy
 from .pd import PhotometricDistort
-
 
 
 class KITTI_Dataset(data.Dataset):
@@ -71,9 +71,9 @@ class KITTI_Dataset(data.Dataset):
         # statistics
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        self.cls_mean_size = np.array([[1.76255119    ,0.66068622   , 0.84422524   ],
-                                       [1.52563191462 ,1.62856739989, 3.88311640418],
-                                       [1.73698127    ,0.59706367   , 1.76282397   ]])
+        self.cls_mean_size = np.array([[1.76255119, 0.66068622, 0.84422524],
+                                       [1.52563191462, 1.62856739989, 3.88311640418],
+                                       [1.73698127, 0.59706367, 1.76282397]])
         if not self.meanshape:
             self.cls_mean_size = np.zeros_like(self.cls_mean_size, dtype=np.float32)
 
@@ -97,22 +97,20 @@ class KITTI_Dataset(data.Dataset):
         assert os.path.exists(calib_file)
         return Calibration(calib_file)
 
-    def eval(self, results_dir, logger):
+    def eval(self, results_dir, logger) -> Tuple[Dict[str, float], float]:
         logger.info("==> Loading detections and GTs...")
         img_ids = [int(id) for id in self.idx_list]
         dt_annos = kitti.get_label_annos(results_dir)
         gt_annos = kitti.get_label_annos(self.label_dir, img_ids)
 
-        test_id = {'Car': 0, 'Pedestrian':1, 'Cyclist': 2}
-
+        test_id = {'Car': 0, 'Pedestrian': 1, 'Cyclist': 2}
+        class_to_eval = [test_id[category] for category in self.writelist]
         logger.info('==> Evaluating (official) ...')
-        car_moderate = 0
-        for category in self.writelist:
-            results_str, results_dict, mAP3d_R40 = get_official_eval_result(gt_annos, dt_annos, test_id[category])
-            if category == 'Car':
-                car_moderate = mAP3d_R40
-            logger.info(results_str)
-        return car_moderate
+        results_str, results_dict, mAP3d_R40 = get_official_eval_result(gt_annos, dt_annos, class_to_eval)
+
+        logger.info(results_str)
+        # Returns the result dict and Car_3d_moderate
+        return results_dict, mAP3d_R40
 
     def __len__(self):
         return self.idx_list.__len__()
@@ -140,7 +138,7 @@ class KITTI_Dataset(data.Dataset):
             if np.random.random() < self.random_flip:
                 random_flip_flag = True
                 img = img.transpose(Image.FLIP_LEFT_RIGHT)
-            
+
             if self.aug_crop:
                 if np.random.random() < self.random_crop:
                     random_crop_flag = True
@@ -179,15 +177,19 @@ class KITTI_Dataset(data.Dataset):
                 calib.flip(img_size)
             for object in objects:
                 [x1, _, x2, _] = object.box2d
-                object.box2d[0],  object.box2d[2] = img_size[0] - x2, img_size[0] - x1
+                object.box2d[0], object.box2d[2] = img_size[0] - x2, img_size[0] - x1
                 object.alpha = np.pi - object.alpha
                 object.ry = np.pi - object.ry
                 if self.aug_calib:
                     object.pos[0] *= -1
-                if object.alpha > np.pi:  object.alpha -= 2 * np.pi  # check range
-                if object.alpha < -np.pi: object.alpha += 2 * np.pi
-                if object.ry > np.pi:  object.ry -= 2 * np.pi
-                if object.ry < -np.pi: object.ry += 2 * np.pi
+                if object.alpha > np.pi:
+                    object.alpha -= 2 * np.pi  # check range
+                if object.alpha < -np.pi:
+                    object.alpha += 2 * np.pi
+                if object.ry > np.pi:
+                    object.ry -= 2 * np.pi
+                if object.ry < -np.pi:
+                    object.ry += 2 * np.pi
 
         # labels encoding
         calibs = np.zeros((self.max_objs, 3, 4), dtype=np.float32)
@@ -197,7 +199,7 @@ class KITTI_Dataset(data.Dataset):
         depth = np.zeros((self.max_objs, 1), dtype=np.float32)
         heading_bin = np.zeros((self.max_objs, 1), dtype=np.int64)
         heading_res = np.zeros((self.max_objs, 1), dtype=np.float32)
-        size_2d = np.zeros((self.max_objs, 2), dtype=np.float32) 
+        size_2d = np.zeros((self.max_objs, 2), dtype=np.float32)
         size_3d = np.zeros((self.max_objs, 3), dtype=np.float32)
         src_size_3d = np.zeros((self.max_objs, 3), dtype=np.float32)
         boxes = np.zeros((self.max_objs, 4), dtype=np.float32)
@@ -221,7 +223,7 @@ class KITTI_Dataset(data.Dataset):
 
             # process 2d bbox & get 2d center
             bbox_2d = objects[i].box2d.copy()
-            
+
             # add affine transformation for 2d boxes.
             bbox_2d[:2] = affine_transform(bbox_2d[:2], trans)
             bbox_2d[2:] = affine_transform(bbox_2d[2:], trans)
@@ -241,13 +243,13 @@ class KITTI_Dataset(data.Dataset):
             # filter 3d center out of img
             proj_inside_img = True
 
-            if center_3d[0] < 0 or center_3d[0] >= self.resolution[0]: 
+            if center_3d[0] < 0 or center_3d[0] >= self.resolution[0]:
                 proj_inside_img = False
-            if center_3d[1] < 0 or center_3d[1] >= self.resolution[1]: 
+            if center_3d[1] < 0 or center_3d[1] >= self.resolution[1]:
                 proj_inside_img = False
 
             if proj_inside_img == False:
-                    continue
+                continue
 
             # class
             cls_id = self.cls2id[objects[i].cls_type]
@@ -275,7 +277,7 @@ class KITTI_Dataset(data.Dataset):
                     t = np.clip(t, 0, 1)
                     b = np.clip(b, 0, 1)
                 else:
-                    continue		
+                    continue
 
             boxes[i] = center_2d_norm[0], center_2d_norm[1], size_2d_norm[0], size_2d_norm[1]
             boxes_3d[i] = center_3d_norm[0], center_3d_norm[1], l, r, t, b
@@ -285,8 +287,10 @@ class KITTI_Dataset(data.Dataset):
 
             # encoding heading angle
             heading_angle = calib.ry2alpha(objects[i].ry, (objects[i].box2d[0] + objects[i].box2d[2]) / 2)
-            if heading_angle > np.pi:  heading_angle -= 2 * np.pi  # check range
-            if heading_angle < -np.pi: heading_angle += 2 * np.pi
+            if heading_angle > np.pi:
+                heading_angle -= 2 * np.pi  # check range
+            if heading_angle < -np.pi:
+                heading_angle += 2 * np.pi
             heading_bin[i], heading_res[i] = angle2class(heading_angle)
 
             # encoding size_3d
@@ -302,19 +306,19 @@ class KITTI_Dataset(data.Dataset):
         # collect return data
         inputs = img
         targets = {
-                   'calibs': calibs,
-                   'indices': indices,
-                   'img_size': img_size,
-                   'labels': labels,
-                   'boxes': boxes,
-                   'boxes_3d': boxes_3d,
-                   'depth': depth,
-                   'size_2d': size_2d,
-                   'size_3d': size_3d,
-                   'src_size_3d': src_size_3d,
-                   'heading_bin': heading_bin,
-                   'heading_res': heading_res,
-                   'mask_2d': mask_2d}
+            'calibs': calibs,
+            'indices': indices,
+            'img_size': img_size,
+            'labels': labels,
+            'boxes': boxes,
+            'boxes_3d': boxes_3d,
+            'depth': depth,
+            'size_2d': size_2d,
+            'size_3d': size_3d,
+            'src_size_3d': src_size_3d,
+            'heading_bin': heading_bin,
+            'heading_res': heading_res,
+            'mask_2d': mask_2d}
 
         info = {'img_id': index,
                 'img_size': img_size,
@@ -326,7 +330,7 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     cfg = {'root_dir': '../../../data/KITTI',
            'random_flip': 0.0, 'random_crop': 1.0, 'scale': 0.8, 'shift': 0.1, 'use_dontcare': False,
-           'class_merging': False, 'writelist':['Pedestrian', 'Car', 'Cyclist'], 'use_3d_center':False}
+           'class_merging': False, 'writelist': ['Pedestrian', 'Car', 'Cyclist'], 'use_3d_center': False}
     dataset = KITTI_Dataset('train', cfg)
     dataloader = DataLoader(dataset=dataset, batch_size=1)
     print(dataset.writelist)

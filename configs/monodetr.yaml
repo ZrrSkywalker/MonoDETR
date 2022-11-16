@@ -95,7 +95,6 @@ lr_scheduler:
 
 trainer:
   max_epoch: 195
-  gpu_ids: '0'
   save_frequency: 1  # checkpoint save interval (in epoch)
   # resume_model: True
   # pretrain_model: path/to/ckpt
