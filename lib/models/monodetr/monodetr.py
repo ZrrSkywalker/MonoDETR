@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch import nn
 import math
 import copy
+from lib.datasets.utils import class2angle
 
 from utils import box_ops
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list,
@@ -19,6 +20,7 @@ from .depthaware_transformer import build_depthaware_transformer
 from .depth_predictor import DepthPredictor
 from .depth_predictor.ddn_loss import DDNLoss
 from lib.losses.focal_loss import sigmoid_focal_loss
+from lib.losses.RDIoU import rdiou
 
 
 def _get_clones(module, N):
@@ -361,6 +363,60 @@ class SetCriterion(nn.Module):
         loss_giou = loss_giou.sum() / num_boxes
         return loss_giou
 
+    def loss_rdiou(self,
+                   outputs: Dict[str, torch.Tensor],
+                   targets: List[Dict[str, torch.Tensor]],
+                   indices: List[Tuple[torch.Tensor, torch.Tensor]],
+                   num_boxes: int) -> torch.Tensor:
+        idx = self._get_src_permutation_idx(indices)
+        # (3d_cx, 3d_cy), shape: [num_boxes, 2]
+        src_3dcenter = outputs['pred_boxes'][:, :, 0:2][idx]
+
+        # (depth, depth_log_variance)
+        src_depths = outputs['pred_depth'][idx]
+        # [num_boxes, 1]
+        depth_input = src_depths[..., 0:1]
+
+        # [num_boxes, 3]
+        src_dims = outputs['pred_3d_dim'][idx]
+
+        # [num_boxes, 24]
+        heading_input = outputs['pred_angle'][idx]
+        # [num_boxes, 1]
+        heading_cls = heading_input[..., :heading_input.shape[-1] // 2].argmax(-1, keepdim=True)
+        # [num_boxes, 12]
+        heading_res = heading_input[..., heading_input.shape[-1] // 2:]
+        # [num_boxes, 1]
+        heading_res = heading_res.gather(dim=-1, index=heading_cls)
+        # [num_boxes, 1]
+        heading_angle = class2angle(heading_cls, heading_res, to_label_format=True)
+
+        # [num_boxes, 7]
+        bboxes = torch.cat([src_3dcenter, depth_input, src_dims, heading_angle], dim=-1)
+
+        # [num_boxes, 2]
+        target_3dcenter = torch.cat([t['boxes_3d'][:, 0:2][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        # [num_boxes, 1]
+        target_depths = torch.cat([t['depth'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        # [num_boxes, 3]
+        target_dims = torch.cat([t['size_3d'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+
+        # [num_boxes, 1]
+        target_heading_cls = torch.cat([t['heading_bin'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+        # [num_boxes, 1]
+        target_heading_res = torch.cat([t['heading_res'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+        # [num_boxes, 1]
+        target_heading_angle = class2angle(target_heading_cls, target_heading_res, to_label_format=True)
+
+        # [num_boxes, 7]
+        target_bboxes = torch.cat([target_3dcenter, target_depths, target_dims, target_heading_angle], dim=-1)
+
+        center_distance_penalty, iou = rdiou(bboxes, target_bboxes)
+        loss_rdiou = 1 - torch.clamp(iou - center_distance_penalty, min=-1.0, max=1.0)
+        loss_rdiou = loss_rdiou.sum() / num_boxes
+        return loss_rdiou
 
     def loss_depths(self, outputs, targets, indices, num_boxes):
 
@@ -447,6 +503,7 @@ class SetCriterion(nn.Module):
             'cardinality_error': self.loss_cardinality,
             'loss_bbox': self.loss_boxes,
             'loss_giou': self.loss_giou,
+            'loss_rdiou': self.loss_rdiou,
             'loss_depth': self.loss_depths,
             'loss_dim': self.loss_dims,
             'loss_angle': self.loss_angles,
