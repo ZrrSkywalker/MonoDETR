@@ -77,7 +77,7 @@ class Tester(object):
             img_sizes = info['img_size'].to(self.device)
 
             start_time = time.time()
-            outputs = self.model(inputs, calibs, targets, img_sizes)
+            outputs = self.model(inputs, calibs, img_sizes)
             end_time = time.time()
             model_infer_time += end_time - start_time
 

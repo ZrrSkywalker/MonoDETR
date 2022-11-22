@@ -1,9 +1,9 @@
 import os
+from typing import Dict, List, Union
 import tqdm
 
 import torch
 import numpy as np
-import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
 from lib.helpers.save_helper import get_checkpoint_state
@@ -84,12 +84,10 @@ class Trainer(object):
             # update learning rate
             if self.warmup_lr_scheduler is not None and epoch < 5:
                 self.warmup_lr_scheduler.step()
-                if self.with_tensorboard:
-                    self.writer.add_scalar('learning_rate', self.warmup_lr_scheduler.get_lr())
             else:
                 self.lr_scheduler.step()
-                if self.with_tensorboard:
-                    self.writer.add_scalar('learning_rate', self.lr_scheduler.get_lr())
+            if self.with_tensorboard:
+                self.log_tensorboard({'learning_rate': self.optimizer.param_groups[0]['lr']}, global_step=epoch)
 
             # save trained model
             if (self.epoch % self.cfg['save_frequency']) == 0:
@@ -115,8 +113,8 @@ class Trainer(object):
                             ckpt_name)
                     self.logger.info("Best Result: {}, epoch: {}".format(best_result, best_epoch))
                     if self.with_tensorboard:
-                        for key, value in result_dict.items():
-                            self.writer.add_scalar(f'val/{key}', value, global_step=epoch)
+                        self.log_tensorboard(result_dict, global_step=epoch, tag='val')
+
             progress_bar.update()
 
         self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
@@ -126,7 +124,7 @@ class Trainer(object):
     def train_one_epoch(self, epoch):
         torch.set_grad_enabled(True)
         self.model.train()
-        print(">>>>>>> Epoch:", str(epoch) + ":")
+        # print(">>>>>>> Epoch:", str(epoch) + ":")
 
         progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch + 1 == self.cfg['max_epoch']), desc='iters')
         for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
@@ -139,13 +137,13 @@ class Trainer(object):
 
             # train one batch
             self.optimizer.zero_grad()
-            outputs = self.model(inputs, calibs, targets, img_sizes)
+            outputs = self.model(inputs, calibs, img_sizes)
 
             detr_losses_dict = self.detr_loss(outputs, targets)
 
             weight_dict = self.detr_loss.weight_dict
             detr_losses_dict_weighted = [detr_losses_dict[k] * weight_dict[k] for k in detr_losses_dict.keys() if k in weight_dict]
-            detr_losses = sum(detr_losses_dict_weighted)
+            detr_losses = torch.stack(detr_losses_dict_weighted).sum()
 
             detr_losses_dict = misc.reduce_dict(detr_losses_dict)
             detr_losses_dict_log = {}
@@ -156,27 +154,26 @@ class Trainer(object):
                     detr_losses_log += detr_losses_dict_log[k]
             detr_losses_dict_log["loss_detr"] = detr_losses_log
 
-            flags = [True] * 5
+            # flags = [True] * 5
             if batch_idx % 30 == 0:
-                print("----", batch_idx, "----")
-                print("%s: %.2f, " % ("loss_detr", detr_losses_dict_log["loss_detr"]))
-                for key, val in detr_losses_dict_log.items():
-                    if key == "loss_detr":
-                        continue
-                    if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
-                        if flags[int(key[-1])]:
-                            print("")
-                            flags[int(key[-1])] = False
-                    print("%s: %.2f, " % (key, val), end="")
-                print("")
-                print("")
+                # print("----", batch_idx, "----")
+                # print("%s: %.2f, " % ("loss_detr", detr_losses_dict_log["loss_detr"]))
+                # for key, val in detr_losses_dict_log.items():
+                #     if key == "loss_detr":
+                #         continue
+                #     if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
+                #         if flags[int(key[-1])]:
+                #             print("")
+                #             flags[int(key[-1])] = False
+                #     print("%s: %.2f, " % (key, val), end="")
+                # print("")
+                # print("")
 
                 if self.with_tensorboard:
-                    for key, value in detr_losses_dict_log.items():
-                        self.writer.add_scalar(
-                            f'train/{key}',
-                            value,
-                            global_step=epoch * len(self.train_loader) + batch_idx)
+                    self.log_tensorboard(
+                        detr_losses_dict_log,
+                        global_step=epoch * len(self.train_loader) + batch_idx,
+                        tag='train')
 
             detr_losses.backward()
             self.optimizer.step()
@@ -184,7 +181,30 @@ class Trainer(object):
             progress_bar.update()
         progress_bar.close()
 
-    def prepare_targets(self, targets, batch_size):
+    def prepare_targets(self, targets: Dict[str, torch.Tensor], batch_size: int) -> List[Dict[str, torch.Tensor]]:
+        """Organizes targets to list of dicts.
+
+        Args:
+            targets: A dict with following keys:
+                * 'calibs'
+                * 'indices'
+                * 'img_size'
+                * 'labels'
+                * 'boxes'
+                * 'boxes_3d'
+                * 'depth'
+                * 'size_2d'
+                * 'size_3d'
+                * 'src_size_3d'
+                * 'heading_bin'
+                * 'heading_res'
+                * 'mask_2d'
+                Each value of the key is a tensor.
+
+        Returns:
+            A list of dicts of tensors.
+            [{batch_0_dict}, {batch_1_dict}, ...]
+        """
         targets_list = []
         mask = targets['mask_2d']
 
@@ -196,3 +216,8 @@ class Trainer(object):
                     target_dict[key] = val[bz][mask[bz]]
             targets_list.append(target_dict)
         return targets_list
+
+    def log_tensorboard(self, log_dict: Dict[str, Union[torch.Tensor, float]], global_step: int, tag: str = ''):
+        for key, value in log_dict.items():
+            name = f'{tag}/{key}' if tag else key
+            self.writer.add_scalar(name, value, global_step=global_step)

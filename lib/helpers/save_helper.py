@@ -36,7 +36,10 @@ def load_checkpoint(model, optimizer, filename, map_location, logger=None):
         best_result = checkpoint.get('best_result', 0.0)
         best_epoch = checkpoint.get('best_epoch', 0.0)
         if model is not None and checkpoint['model_state'] is not None:
-            model.load_state_dict(checkpoint['model_state'])
+            if isinstance(model, torch.nn.DataParallel):
+                model.module.load_state_dict(checkpoint['model_state'])
+            else:
+                model.load_state_dict(checkpoint['model_state'])
         if optimizer is not None and checkpoint['optimizer_state'] is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state'])
         logger.info("==> Done")

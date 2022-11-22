@@ -1,6 +1,7 @@
 ''' some auxiliary functions for all datasets '''
 import numpy as np
 import cv2
+import torch
 
 
 num_heading_bin = 12  # hyper param
@@ -21,8 +22,13 @@ def class2angle(cls, residual, to_label_format=False):
     angle_per_class = 2 * np.pi / float(num_heading_bin)
     angle_center = cls * angle_per_class
     angle = angle_center + residual
-    if to_label_format and angle > np.pi:
-        angle = angle - 2 * np.pi
+    if to_label_format:
+        if isinstance(angle, torch.Tensor):
+            angle[angle > torch.pi] -= 2 * torch.pi
+        elif isinstance(angle, np.ndarray):
+            angle[angle > np.pi] -= 2 * np.pi
+        elif angle > np.pi:
+            angle = angle - 2 * np.pi
     return angle
 
 

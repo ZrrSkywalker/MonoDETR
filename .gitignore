@@ -7,3 +7,4 @@ __pycache__/
 lib/models/monodetr/ops/MultiScaleDeformableAttention.egg-info
 *.png
 *.csv
+.vscode/

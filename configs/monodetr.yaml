@@ -1,17 +1,17 @@
 random_seed: 444
 
 dataset:
-  type: &dataset_type 'KITTI'
-  root_dir: 'data/KITTIDataset'
-  train_split: 'train'
-  test_split: 'val'
+  type: &dataset_type "KITTI"
+  root_dir: "data/KITTIDataset"
+  train_split: "train"
+  test_split: "val"
   batch_size: 16
   use_3d_center: True
   class_merging: False
   use_dontcare: False
-  bbox2d_type: 'anno'  # 'proj' or 'anno'
-  meanshape: False  # use predefined anchor or not
-  writelist: ['Car']
+  bbox2d_type: "anno" # 'proj' or 'anno'
+  meanshape: False # use predefined anchor or not
+  writelist: ["Car"]
   clip_2d: False
 
   aug_pd: True
@@ -22,20 +22,19 @@ dataset:
   scale: 0.05
   shift: 0.05
 
-
-model_name: 'monodetr'
+model_name: "monodetr_rdiou"
 
 model:
   num_classes: 3
   return_intermediate_dec: True
-  device: 'cuda'
+  device: "cuda"
 
   # Backbone
-  backbone: 'resnet50'
+  backbone: "resnet50"
   train_backbone: True
   num_feature_levels: 4
   dilation: False
-  position_embedding: 'sine'  # 'sine' or 'learned'
+  position_embedding: "sine" # 'sine' or 'learned'
   masks: False
 
   # Depth predictor
@@ -59,19 +58,19 @@ model:
   dec_n_points: 4
 
   # Loss
-  aux_loss: True
+  # aux_loss: True
 
   # Loss coefficients
-  cls_loss_coef: 2
-  focal_alpha: 0.25
+  # cls_loss_coef: 2
+  # focal_alpha: 0.25
 
-  bbox_loss_coef: 5
-  giou_loss_coef: 2
-  3dcenter_loss_coef: 10
-  dim_loss_coef: 1
-  angle_loss_coef: 1
-  depth_loss_coef: 1
-  depth_map_loss_coef: 1
+  # bbox_loss_coef: 5
+  # giou_loss_coef: 2
+  # 3dcenter_loss_coef: 10
+  # dim_loss_coef: 1
+  # angle_loss_coef: 1
+  # depth_loss_coef: 1
+  # depth_map_loss_coef: 1
 
   # Matcher
   set_cost_class: 2
@@ -79,32 +78,56 @@ model:
   set_cost_giou: 2
   set_cost_3dcenter: 10
 
+loss:
+  losses:
+    [
+      cardinality_error,
+      loss_angle,
+      loss_bbox,
+      loss_center,
+      loss_cls,
+      loss_depth,
+      loss_depth_map,
+      loss_dim,
+      loss_giou,
+      loss_rdiou,
+    ]
+  aux_loss: True
+  focal_alpha: 0.25
+
+  weights:
+    loss_angle: 1
+    loss_bbox: 5 # 2D boxes IoU
+    loss_center: 10 # 3D center
+    loss_cls: 2 # classification
+    loss_depth: 1
+    loss_depth_map: 1 # DDN loss
+    loss_dim: 1
+    loss_giou: 2 # 3D boxes to 2D boxes IoU
+    loss_rdiou: 1
 
 optimizer:
-  type: 'adamw'
+  type: "adamw"
   lr: 0.0002
   weight_decay: 0.0001
 
-
 lr_scheduler:
-  type: 'step'  # 'step' or 'cos'
-  warmup: False  # 5 epoches, cosine warmup, init_lir=0.00001 in default
+  type: "step" # 'step' or 'cos'
+  warmup: False # 5 epoches, cosine warmup, init_lir=0.00001 in default
   decay_rate: 0.1
   decay_list: [125, 165]
 
-
 trainer:
   max_epoch: 195
-  save_frequency: 1  # checkpoint save interval (in epoch)
+  save_frequency: 1 # checkpoint save interval (in epoch)
   # resume_model: True
-  # pretrain_model: path/to/ckpt
-  save_path: './runs/'
-  save_all: False  # False for only savng the best and latest ckpts
-
+  # pretrain_model: runs/monodetr2/checkpoint_best.pth
+  save_path: "./runs/"
+  save_all: False # False for only savng the best and latest ckpts
 
 tester:
   type: *dataset_type
-  mode: single  # 'single' or 'all'; 'all' to evaluate all ckpts in the folder
-  checkpoint: 195  # the start ckpt epoch for 'all'
-  threshold: 0.2  # confidence filter
+  mode: single # 'single' or 'all'; 'all' to evaluate all ckpts in the folder
+  checkpoint: 195 # the start ckpt epoch for 'all'
+  threshold: 0.2 # confidence filter
   topk: 50

@@ -1,4 +1,4 @@
-import torch
+import os
 import numpy as np
 from torch.utils.data import DataLoader
 from lib.datasets.kitti.kitti_dataset import KITTI_Dataset
@@ -17,16 +17,18 @@ def build_dataloader(cfg, workers=4):
     else:
         raise NotImplementedError("%s dataset is not supported" % cfg['type'])
 
+    num_gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', '').split(','))
+
     # prepare dataloader
     train_loader = DataLoader(dataset=train_set,
-                              batch_size=cfg['batch_size'],
+                              batch_size=cfg['batch_size'] * num_gpus,
                               num_workers=workers,
                               worker_init_fn=my_worker_init_fn,
                               shuffle=True,
                               pin_memory=False,
                               drop_last=False)
     test_loader = DataLoader(dataset=test_set,
-                             batch_size=cfg['batch_size'],
+                             batch_size=cfg['batch_size'] * num_gpus,
                              num_workers=workers,
                              worker_init_fn=my_worker_init_fn,
                              shuffle=False,

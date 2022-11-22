@@ -43,9 +43,10 @@ def main(args):
     train_loader, test_loader = build_dataloader(cfg['dataset'])
 
     # build model
-    model, loss = build_model(cfg['model'])
+    model, loss = build_model(cfg['model'], cfg['loss'])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    gpu_ids = list(map(int, args.gpu.split(',')))
+    gpu_ids = list(range(len(os.getenv('CUDA_VISIBLE_DEVICES', '').split(','))))
+
 
     if len(gpu_ids) == 1:
         model = model.to(device)
@@ -90,7 +91,7 @@ def main(args):
         trainer.tester = tester
 
     logger.info('###################  Training  ##################')
-    logger.info('Batch Size: %d' % (cfg['dataset']['batch_size']))
+    logger.info('Batch Size per GPU: %d' % (cfg['dataset']['batch_size']))
     logger.info('Learning Rate: %f' % (cfg['optimizer']['lr']))
 
     trainer.train()
@@ -109,7 +110,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
     parser.add_argument('-c', '--config', type=Path, help='settings of detection in yaml format')
     parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
-    parser.add_argument('-g', '--gpu', default='0')
 
     args = parser.parse_args()
 
