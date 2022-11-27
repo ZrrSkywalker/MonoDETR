@@ -4,6 +4,8 @@ import tqdm
 import shutil
 
 import torch
+from torch import nn
+from torch.utils.data import DataLoader
 from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.decode_helper import extract_dets_from_outputs
 from lib.helpers.decode_helper import decode_detections
@@ -11,18 +13,25 @@ import time
 
 
 class Tester(object):
-    def __init__(self, cfg, model, dataloader, logger, train_cfg=None, model_name='monodetr'):
+    def __init__(self,
+                 cfg,
+                 model: nn.Module,
+                 dataloader: DataLoader,
+                 logger: logging.Logger,
+                 device: torch.device,
+                 train_cfg,
+                 model_name: str):
         self.cfg = cfg
         self.model = model
         self.dataloader = dataloader
-        self.max_objs = dataloader.dataset.max_objs    # max objects per images, defined in dataset
         self.class_name = dataloader.dataset.class_name
         self.output_dir = os.path.join('./' + train_cfg['save_path'], model_name)
         self.dataset_type = cfg.get('type', 'KITTI')
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.logger = logger
         self.train_cfg = train_cfg
         self.model_name = model_name
+        self.epoch = 0
 
     def test(self):
         assert self.cfg['mode'] in ['single', 'all']
@@ -63,12 +72,14 @@ class Tester(object):
                 self.inference()
                 self.evaluate()
 
-    def inference(self):
-        torch.set_grad_enabled(False)
+    @torch.no_grad()
+    def inference(self, loss: Optional[nn.Module] = None, return_loss: bool = False):
+        self.dataloader.sampler.set_epoch(self.epoch)
+        self.epoch += 1
         self.model.eval()
 
         results = {}
-        progress_bar = tqdm.tqdm(total=len(self.dataloader), leave=True, desc='Evaluation Progress')
+        progress_bar = tqdm.tqdm(total=len(self.dataloader), dynamic_ncols=True, leave=True, desc='Evaluation Progress')
         model_infer_time = 0
         for batch_idx, (inputs, calibs, targets, info) in enumerate(self.dataloader):
             # load evaluation data and move data to GPU.
@@ -81,7 +92,7 @@ class Tester(object):
             end_time = time.time()
             model_infer_time += end_time - start_time
 
-            dets = extract_dets_from_outputs(outputs=outputs, K=self.max_objs, topk=self.cfg['topk'])
+            dets = extract_dets_from_outputs(outputs=outputs, topk=self.cfg['topk'])
 
             dets = dets.detach().cpu().numpy()
 
@@ -99,8 +110,7 @@ class Tester(object):
             results.update(dets)
             progress_bar.update()
 
-        print("inference on {} images by {}/per image".format(
-            len(self.dataloader), model_infer_time / len(self.dataloader)))
+        self.logger.info(f'Inference on {len(self.dataloader)} images by {model_infer_time / len(self.dataloader)}/per image.')
 
         progress_bar.close()
 

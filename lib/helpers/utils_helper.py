@@ -5,12 +5,12 @@ import random
 
 
 def create_logger(log_file, rank=0):
-    log_format = '%(asctime)s  %(levelname)5s %(filename)s %(lineno)3s %(message)s'
-    logging.basicConfig(level=logging.INFO if rank == 0 else 'ERROR',
+    log_format = '%(asctime)s  %(levelname)5s %(filename)s line=%(lineno)3s' + f' rank={rank} ' + '%(message)s'
+    logging.basicConfig(level=logging.INFO,
                         format=log_format,
                         filename=log_file)
     console = logging.StreamHandler()
-    console.setLevel(logging.INFO if rank == 0 else 'ERROR')
+    console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter(log_format))
     logging.getLogger(__name__).addHandler(console)
     return logging.getLogger(__name__)

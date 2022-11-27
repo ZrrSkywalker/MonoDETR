@@ -98,7 +98,7 @@ class DepthAwareTransformer(nn.Module):
 
             scale = torch.cat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(N_, 1, 1, 2)
             grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
-            
+
             lr = torch.ones_like(grid) * 0.05 * (2.0 ** lvl)
             tb = torch.ones_like(grid) * 0.05 * (2.0 ** lvl)
             wh = torch.cat((lr, tb), -1)
@@ -173,8 +173,8 @@ class DepthAwareTransformer(nn.Module):
             topk_coords_unact = topk_coords_unact.detach()
             reference_points = topk_coords_unact.sigmoid()
             init_reference_out = reference_points
-            
-            topk_coords_unact_input = torch.cat((topk_coords_unact[..., 0: 2], topk_coords_unact[..., 2: : 2] + topk_coords_unact[..., 3: : 2]), dim=-1)
+
+            topk_coords_unact_input = torch.cat((topk_coords_unact[..., 0: 2], topk_coords_unact[..., 2:: 2] + topk_coords_unact[..., 3:: 2]), dim=-1)
 
             pos_trans_out = self.pos_trans_norm(self.pos_trans(self.get_proposal_pos_embed(topk_coords_unact_input)))
             query_embed, tgt = torch.split(pos_trans_out, c, dim=2)
@@ -379,7 +379,7 @@ class DepthAwareDecoder(nn.Module):
         for lid, layer in enumerate(self.layers):
             if reference_points.shape[-1] == 6:
                 reference_points_input = reference_points[:, :, None] \
-                                         * torch.cat([src_valid_ratios, src_valid_ratios, src_valid_ratios], -1)[:, None]
+                    * torch.cat([src_valid_ratios, src_valid_ratios, src_valid_ratios], -1)[:, None]
             else:
                 # print(reference_points.shape[-1])
                 assert reference_points.shape[-1] == 2

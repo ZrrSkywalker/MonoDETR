@@ -24,10 +24,10 @@ class KITTI_Dataset(data.Dataset):
     def __init__(self, split, cfg):
 
         # basic configuration
-        self.root_dir = cfg.get('root_dir')
+        self.root_dir = cfg['root_dir']
         self.split = split
         self.num_classes = 3
-        self.max_objs = 50
+        self.max_objs = cfg.get('max_objs', 50)
         self.class_name = ['Pedestrian', 'Car', 'Cyclist']
         self.cls2id = {'Pedestrian': 0, 'Car': 1, 'Cyclist': 2}
         self.resolution = np.array([1280, 384])  # W * H

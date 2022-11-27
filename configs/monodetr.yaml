@@ -6,6 +6,7 @@ dataset:
   train_split: "train"
   test_split: "val"
   batch_size: 16
+  num_workers: 8
   use_3d_center: True
   class_merging: False
   use_dontcare: False
@@ -27,7 +28,6 @@ model_name: "monodetr_rdiou"
 model:
   num_classes: 3
   return_intermediate_dec: True
-  device: "cuda"
 
   # Backbone
   backbone: "resnet50"

@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple, Union
 import torch
 import torch.nn.functional as F
 from torch import nn
+import torch.distributed as dist
 import math
 import copy
 from lib.datasets.utils import class2angle
@@ -279,7 +280,7 @@ class SetCriterion(nn.Module):
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
 
-    def __init__(self, num_classes, matcher, weight_dict, focal_alpha, losses):
+    def __init__(self, num_classes: int, matcher: nn.Module, weight_dict: Dict[str, float], focal_alpha: float, losses: List[str]):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -292,11 +293,12 @@ class SetCriterion(nn.Module):
         self.num_classes = num_classes
         self.matcher = matcher
         self.weight_dict = weight_dict
-        self.losses = losses
+        self.loss_names = losses
+        assert len(self.weight_dict) == len(self.loss_names), f'The length of `weight_dict`({len(self.weight_dict)}) and `loss_names`({len(self.loss_names)}) should be consistent.'
         self.focal_alpha = focal_alpha
         self.ddn_loss = DDNLoss()  # for depth map
 
-    def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
+    def loss_labels(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
         """Classification loss (Binary focal loss)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
         """
@@ -319,7 +321,7 @@ class SetCriterion(nn.Module):
         return loss_cls
 
     @torch.no_grad()
-    def loss_cardinality(self, outputs, targets, indices, num_boxes):
+    def loss_cardinality(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
         """ Compute the cardinality error, ie the absolute error in the number of predicted non-empty boxes
         This is not really a loss, it is intended for logging purposes only. It doesn't propagate gradients
         """
@@ -331,7 +333,7 @@ class SetCriterion(nn.Module):
         card_err = F.l1_loss(card_pred.float(), tgt_lengths.float())
         return card_err
 
-    def loss_3dcenter(self, outputs, targets, indices, num_boxes):
+    def loss_3dcenter(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
 
         idx = self._get_src_permutation_idx(indices)
         src_3dcenter = outputs['pred_boxes'][:, :, 0: 2][idx]
@@ -340,7 +342,7 @@ class SetCriterion(nn.Module):
         loss_3dcenter = F.l1_loss(src_3dcenter, target_3dcenter, reduction='sum') / num_boxes
         return loss_3dcenter
 
-    def loss_boxes(self, outputs, targets, indices, num_boxes):
+    def loss_boxes(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
 
         assert 'pred_boxes' in outputs
         idx = self._get_src_permutation_idx(indices)
@@ -352,7 +354,7 @@ class SetCriterion(nn.Module):
         loss_bbox = F.l1_loss(src_2dboxes, target_2dboxes, reduction='sum') / num_boxes
         return loss_bbox
 
-    def loss_giou(self, outputs, targets, indices, num_boxes):
+    def loss_giou(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
         idx = self._get_src_permutation_idx(indices)
         # (3d_cx, 3d_cy, l, r, t, b)
         src_boxes = outputs['pred_boxes'][idx]
@@ -418,7 +420,7 @@ class SetCriterion(nn.Module):
         loss_rdiou = loss_rdiou.sum() / num_boxes
         return loss_rdiou
 
-    def loss_depths(self, outputs, targets, indices, num_boxes):
+    def loss_depths(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
 
         idx = self._get_src_permutation_idx(indices)
         src_depths = outputs['pred_depth'][idx]
@@ -429,7 +431,7 @@ class SetCriterion(nn.Module):
         depth_loss = depth_loss.sum() / num_boxes
         return depth_loss
 
-    def loss_dims(self, outputs, targets, indices, num_boxes):
+    def loss_dims(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
 
         idx = self._get_src_permutation_idx(indices)
         src_dims = outputs['pred_3d_dim'][idx]
@@ -472,11 +474,15 @@ class SetCriterion(nn.Module):
         angle_loss = angle_loss / num_boxes
         return angle_loss
 
-    def loss_depth_map(self, outputs, targets, indices, num_boxes):
+    def loss_depth_map(self,
+                       outputs: Dict[str, torch.Tensor],
+                       targets: List[Dict[str, torch.Tensor]],
+                       indices: List[Tuple[torch.Tensor, torch.Tensor]],
+                       num_boxes: int) -> torch.Tensor:
         depth_map_logits = outputs['pred_depth_map_logits']
 
         num_gt_per_img = [len(t['boxes']) for t in targets]
-        gt_boxes2d = torch.cat([t['boxes'] for t in targets], dim=0) * torch.tensor([80, 24, 80, 24], device='cuda')
+        gt_boxes2d = torch.cat([t['boxes'] for t in targets], dim=0) * depth_map_logits.new_tensor([80, 24, 80, 24])
         gt_boxes2d = box_ops.box_cxcywh_to_xyxy(gt_boxes2d)
         gt_center_depth = torch.cat([t['depth'] for t in targets], dim=0).squeeze(dim=1)
 
@@ -496,7 +502,7 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
+    def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
 
         loss_map = {
             'loss_cls': self.loss_labels,
@@ -514,7 +520,7 @@ class SetCriterion(nn.Module):
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
-    def forward(self, outputs, targets):
+    def forward(self, outputs, targets) -> Dict[str, torch.Tensor]:
         """ This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -526,31 +532,28 @@ class SetCriterion(nn.Module):
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)
 
+        device = next(iter(outputs.values())).device
         # Compute the average number of target boxes accross all nodes, for normalization purposes
-        num_boxes = sum(len(t["labels"]) for t in targets)
-        num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
+        num_boxes = torch.tensor([len(t["labels"]) for t in targets], dtype=torch.float, device=device).sum()
         if is_dist_avail_and_initialized():
-            torch.distributed.all_reduce(num_boxes)
+            dist.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
         # Compute all the requested losses
-        losses = {loss_name: self.get_loss(loss_name, outputs, targets, indices, num_boxes)
-                  for loss_name in self.losses}
+        losses = {loss_name:
+                  self.get_loss(loss_name, outputs, targets, indices, num_boxes) * self.weight_dict[loss_name]
+                  for loss_name in self.loss_names}
 
         # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets)
-                for loss_name in self.losses:
+                for loss_name in self.loss_names:
                     # Intermediate masks losses are too costly to compute, we ignore them.
                     if loss_name == 'loss_depth_map':
                         continue
-                    kwargs = {}
-                    if loss_name == 'loss_cls':
-                        # Logging is enabled only for the last layer
-                        kwargs = {'log': False}
-                    loss = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes, **kwargs)
-                    losses[f'{loss_name}_{i}'] = loss
+                    loss = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes)
+                    losses[f'{loss_name}_{i}'] = loss * self.weight_dict[loss_name]
 
         return losses
 
@@ -599,12 +602,12 @@ def build(model_cfg, loss_cfg):
     weight_dict = loss_cfg['weights']
 
     # TODO this is a hack
-    if loss_cfg['aux_loss']:
-        aux_weight_dict = {}
-        for i in range(model_cfg['dec_layers'] - 1):
-            aux_weight_dict.update({f'{k}_{i}': v for k, v in weight_dict.items()})
-        aux_weight_dict.update({f'{k}_enc': v for k, v in weight_dict.items()})
-        weight_dict.update(aux_weight_dict)
+    # if loss_cfg['aux_loss']:
+    #     aux_weight_dict = {}
+    #     for i in range(model_cfg['dec_layers'] - 1):
+    #         aux_weight_dict.update({f'{loss_name}_{i}': v for loss_name, v in weight_dict.items()})
+    #     aux_weight_dict.update({f'{loss_name}_enc': v for loss_name, v in weight_dict.items()})
+    #     weight_dict.update(aux_weight_dict)
 
     criterion = SetCriterion(
         model_cfg['num_classes'],
@@ -612,7 +615,5 @@ def build(model_cfg, loss_cfg):
         weight_dict=weight_dict,
         focal_alpha=loss_cfg['focal_alpha'],
         losses=loss_cfg['losses'])
-    device = torch.device(model_cfg['device'])
-    criterion.to(device)
 
     return model, criterion

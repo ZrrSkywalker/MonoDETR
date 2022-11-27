@@ -1,6 +1,7 @@
-import os
+from typing import Dict, List
 import numpy as np
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from lib.datasets.kitti.kitti_dataset import KITTI_Dataset
 
 
@@ -17,22 +18,22 @@ def build_dataloader(cfg, workers=4):
     else:
         raise NotImplementedError("%s dataset is not supported" % cfg['type'])
 
-    num_gpus = len(os.getenv('CUDA_VISIBLE_DEVICES', '').split(','))
-
     # prepare dataloader
     train_loader = DataLoader(dataset=train_set,
-                              batch_size=cfg['batch_size'] * num_gpus,
-                              num_workers=workers,
+                              batch_size=cfg['batch_size'],
+                              num_workers=cfg['num_workers'],
                               worker_init_fn=my_worker_init_fn,
-                              shuffle=True,
+                              shuffle=False,
                               pin_memory=False,
-                              drop_last=False)
+                              drop_last=False,
+                              sampler=DistributedSampler(train_set))
     test_loader = DataLoader(dataset=test_set,
-                             batch_size=cfg['batch_size'] * num_gpus,
-                             num_workers=workers,
+                             batch_size=cfg['batch_size'],
+                             num_workers=cfg['num_workers'],
                              worker_init_fn=my_worker_init_fn,
                              shuffle=False,
                              pin_memory=False,
-                             drop_last=False)
+                             drop_last=False,
+                             sampler=DistributedSampler(test_set))
 
     return train_loader, test_loader
