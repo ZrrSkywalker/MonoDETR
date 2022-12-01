@@ -5,12 +5,14 @@ from typing import Dict, List, Tuple, Union
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.types import Number
 import torch.distributed as dist
 import math
 import copy
 from lib.datasets.utils import class2angle
 
 from utils import box_ops
+from utils import misc
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list,
                         accuracy, get_world_size, interpolate,
                         is_dist_avail_and_initialized, inverse_sigmoid)
@@ -520,12 +522,17 @@ class SetCriterion(nn.Module):
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
-    def forward(self, outputs, targets) -> Dict[str, torch.Tensor]:
-        """ This performs the loss computation.
-        Parameters:
-             outputs: dict of tensors, see the output specification of the model for the format
-             targets: list of dicts, such that len(targets) == batch_size.
+    def forward(self, outputs, targets) -> Tuple[Dict[str, torch.Tensor], Dict[str, Number]]:
+        """This performs the loss computation.
+
+        Args:
+            outputs: dict of tensors, see the output specification of the model for the format
+            targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
+
+        Returns:
+            losses: A dict of weighted loss tensors.
+            unweighted_losses_log_dict: A dict of unweighted loss numbers for logging purposes only.
         """
         outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
 
@@ -539,10 +546,13 @@ class SetCriterion(nn.Module):
             dist.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
+        unweighted_losses_log_dict = {}
+        losses = {}
         # Compute all the requested losses
-        losses = {loss_name:
-                  self.get_loss(loss_name, outputs, targets, indices, num_boxes) * self.weight_dict[loss_name]
-                  for loss_name in self.loss_names}
+        for loss_name in self.loss_names:
+            loss = self.get_loss(loss_name, outputs, targets, indices, num_boxes)
+            losses[loss_name] = loss * self.weight_dict[loss_name]
+            unweighted_losses_log_dict[loss_name] = loss
 
         # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
         if 'aux_outputs' in outputs:
@@ -554,8 +564,12 @@ class SetCriterion(nn.Module):
                         continue
                     loss = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes)
                     losses[f'{loss_name}_{i}'] = loss * self.weight_dict[loss_name]
+                    unweighted_losses_log_dict[f'{loss_name}_{i}'] = loss
 
-        return losses
+        unweighted_losses_log_dict = misc.reduce_dict(unweighted_losses_log_dict)
+        unweighted_losses_log_dict = {loss_name: loss.item() for loss_name, loss in unweighted_losses_log_dict.items()}
+
+        return losses, unweighted_losses_log_dict
 
 
 class MLP(nn.Module):

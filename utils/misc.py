@@ -14,7 +14,7 @@ import time
 from collections import defaultdict, deque
 import datetime
 import pickle
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 import torch
 import torch.distributed as dist
@@ -132,7 +132,7 @@ def all_gather(data):
     return data_list
 
 
-def reduce_dict(input_dict, average=True):
+def reduce_dict(input_dict, average=True) -> Dict[str, torch.Tensor]:
     """
     Args:
         input_dict (dict): all the values will be reduced

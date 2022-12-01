@@ -1,11 +1,13 @@
 import os
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import tqdm
-import shutil
+import logging
 
 import torch
 from torch import nn
+from torch.types import Number
 from torch.utils.data import DataLoader
+from lib.helpers.dataloader_helper import prepare_targets
 from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.decode_helper import extract_dets_from_outputs
 from lib.helpers.decode_helper import decode_detections
@@ -73,15 +75,15 @@ class Tester(object):
                 self.evaluate()
 
     @torch.no_grad()
-    def inference(self, loss: Optional[nn.Module] = None, return_loss: bool = False):
+    def inference(self, loss: Optional[nn.Module] = None, return_loss: bool = False) -> Dict[str, Number]:
         self.dataloader.sampler.set_epoch(self.epoch)
         self.epoch += 1
         self.model.eval()
 
         results = {}
-        progress_bar = tqdm.tqdm(total=len(self.dataloader), dynamic_ncols=True, leave=True, desc='Evaluation Progress')
         model_infer_time = 0
-        for batch_idx, (inputs, calibs, targets, info) in enumerate(self.dataloader):
+        log_dict = {}
+        for batch_idx, (inputs, calibs, targets, info) in enumerate(tqdm.tqdm(self.dataloader, dynamic_ncols=True, desc='Evaluation Progress')):
             # load evaluation data and move data to GPU.
             inputs = inputs.to(self.device)
             calibs = calibs.to(self.device)
@@ -89,6 +91,18 @@ class Tester(object):
 
             start_time = time.time()
             outputs = self.model(inputs, calibs, img_sizes)
+            if loss and return_loss:
+                for key in targets:
+                    targets[key] = targets[key].to(self.device)
+                targets = prepare_targets(targets, inputs.shape[0])
+
+                loss_dict, unweighted_loss_log_dict = loss(outputs, targets)
+                loss_detr = torch.stack(list(loss_dict.values())).sum()
+                unweighted_loss_log_dict['loss_detr'] = loss_detr.item()
+
+                for loss_name, value in unweighted_loss_log_dict.items():
+                    log_dict[loss_name] = log_dict.get(loss_name, 0) + value * inputs.shape[0]
+
             end_time = time.time()
             model_infer_time += end_time - start_time
 
@@ -108,15 +122,15 @@ class Tester(object):
                 threshold=self.cfg.get('threshold', 0.2))
 
             results.update(dets)
-            progress_bar.update()
 
+        for loss_name, value in log_dict.items():
+            log_dict[loss_name] /= len(self.dataloader.dataset)
         self.logger.info(f'Inference on {len(self.dataloader)} images by {model_infer_time / len(self.dataloader)}/per image.')
-
-        progress_bar.close()
 
         # save the result for evaluation.
         self.logger.info('==> Saving ...')
         self.save_results(results)
+        return log_dict
 
     def save_results(self, results):
         output_dir = os.path.join(self.output_dir, 'outputs', 'data')

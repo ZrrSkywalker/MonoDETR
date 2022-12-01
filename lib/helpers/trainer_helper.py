@@ -12,6 +12,7 @@ import torch.distributed as dist
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
+from lib.helpers.dataloader_helper import prepare_targets
 from lib.helpers.save_helper import get_checkpoint_state
 from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.save_helper import save_checkpoint
@@ -49,8 +50,8 @@ class Trainer(object):
         self.model_name = model_name
         self.output_dir = os.path.join('./' + cfg['save_path'], model_name)
         self.tester = None
-        self.with_tensorboard = with_tensorboard
-        if with_tensorboard:
+        self.with_tensorboard = with_tensorboard and misc.is_main_process()
+        if self.with_tensorboard:
             self.writer = SummaryWriter(self.output_dir)
 
         # loading pretrain/resume model
@@ -115,8 +116,8 @@ class Trainer(object):
                             get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
                             ckpt_name)
                     if self.tester:
-                        self.logger.info("Test Epoch {}".format(self.epoch))
-                        self.tester.inference()
+                        self.logger.info(f'Test Epoch {self.epoch}')
+                        val_losses_log_dict = self.tester.inference(loss=self.detr_loss, return_loss=True)
                         dist.barrier()
                         if misc.is_main_process():
                             result_dict, cur_result = self.tester.evaluate()
@@ -127,11 +128,13 @@ class Trainer(object):
                                 save_checkpoint(
                                     get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
                                     ckpt_name)
-                            self.logger.info("Best Result: {}, epoch: {}".format(best_result, best_epoch))
+                            self.logger.info(f'Best Result: {best_result}, epoch: {best_epoch}')
                             if self.with_tensorboard:
                                 self.log_tensorboard(result_dict, global_step=self.epoch, tag='val')
+                                self.log_tensorboard(val_losses_log_dict, global_step=self.epoch, tag='val')
 
-        self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
+        if misc.is_main_process():
+            self.logger.info(f'Best Result: {best_result}, epoch: {best_epoch}')
 
         return None
 
@@ -139,108 +142,40 @@ class Trainer(object):
         torch.set_grad_enabled(True)
         self.train_loader.sampler.set_epoch(epoch)
         self.model.train()
-        # print(">>>>>>> Epoch:", str(epoch) + ":")
         self.logger.info(f'Train Epoch {epoch + 1:03}/{self.cfg["max_epoch"]}')
 
-        progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch + 1 == self.cfg['max_epoch']), desc='iters')
-        for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
+        dataloader_len = len(self.train_loader)
+        # log to tensorboard `self.cfg['log_frequency']` times per epoch
+        steps_to_log = set(np.linspace(dataloader_len // self.cfg['log_frequency'], dataloader_len, min(dataloader_len, self.cfg['log_frequency']), dtype=int))
+        for batch_idx, (inputs, calibs, targets, info) in enumerate(tqdm.tqdm(self.train_loader, leave=True, desc='iters')):
             inputs = inputs.to(self.device)
             calibs = calibs.to(self.device)
             for key in targets:
                 targets[key] = targets[key].to(self.device)
             img_sizes = targets['img_size']
-            targets = self.prepare_targets(targets, inputs.shape[0])
+            targets = prepare_targets(targets, inputs.shape[0])
 
             # train one batch
             self.optimizer.zero_grad()
             outputs = self.model(inputs, calibs, img_sizes)
 
-            detr_losses_dict: Dict[str, torch.Tensor] = self.detr_loss(outputs, targets)
+            detr_losses_dict, unweighted_losses_log_dict = self.detr_loss(outputs, targets)
 
             detr_losses = torch.stack(list(detr_losses_dict.values())).sum()
-            # weight_dict = self.detr_loss.weight_dict
-            # detr_losses_dict_weighted = [detr_losses_dict[k] * weight_dict[k] for k in detr_losses_dict.keys() if k in weight_dict]
-            # detr_losses = torch.stack(detr_losses_dict_weighted).sum()
 
-            detr_losses_dict = misc.reduce_dict(detr_losses_dict)
-            detr_losses_dict_log = {loss_name: loss.item() for loss_name, loss in detr_losses_dict.items()}
-            detr_losses_dict_log['loss_detr'] = detr_losses.item()
+            unweighted_losses_log_dict['loss_detr'] = detr_losses.item()
 
-            # detr_losses_dict = misc.reduce_dict(detr_losses_dict)
-            # detr_losses_log = 0
-            # for k in detr_losses_dict.keys():
-            #     if k in weight_dict:
-            #         detr_losses_dict_log[k] = (detr_losses_dict[k] * weight_dict[k]).item()
-            #         detr_losses_log += detr_losses_dict_log[k]
-            # detr_losses_dict_log["loss_detr"] = detr_losses_log
-
-            # flags = [True] * 5
-            if batch_idx % 30 == 0:
-                # print("----", batch_idx, "----")
-                # print("%s: %.2f, " % ("loss_detr", detr_losses_dict_log["loss_detr"]))
-                # for key, val in detr_losses_dict_log.items():
-                #     if key == "loss_detr":
-                #         continue
-                #     if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
-                #         if flags[int(key[-1])]:
-                #             print("")
-                #             flags[int(key[-1])] = False
-                #     print("%s: %.2f, " % (key, val), end="")
-                # print("")
-                # print("")
-
+            if batch_idx in steps_to_log:
                 if self.with_tensorboard:
                     self.log_tensorboard(
-                        detr_losses_dict_log,
-                        global_step=epoch * len(self.train_loader) + batch_idx,
+                        unweighted_losses_log_dict,
+                        global_step=epoch * 100 + int(batch_idx / len(self.train_loader) * 100),
                         tag='train')
 
             detr_losses.backward()
             self.optimizer.step()
 
-            progress_bar.update()
-        progress_bar.close()
-
-    # def validate(self, )
-    def prepare_targets(self, targets: Dict[str, torch.Tensor], batch_size: int) -> List[Dict[str, torch.Tensor]]:
-        """Organizes targets to list of dicts.
-
-        Args:
-            targets: A dict with following keys:
-                * 'calibs'
-                * 'indices'
-                * 'img_size'
-                * 'labels'
-                * 'boxes'
-                * 'boxes_3d'
-                * 'depth'
-                * 'size_2d'
-                * 'size_3d'
-                * 'src_size_3d'
-                * 'heading_bin'
-                * 'heading_res'
-                * 'mask_2d'
-                Each value of the key is a tensor.
-
-        Returns:
-            A list of dicts of tensors.
-            [{batch_0_dict}, {batch_1_dict}, ...]
-        """
-        targets_list = []
-        mask = targets['mask_2d']
-
-        key_list = ['labels', 'boxes', 'calibs', 'depth', 'size_3d', 'heading_bin', 'heading_res', 'boxes_3d']
-        for bz in range(batch_size):
-            target_dict = {}
-            for key, val in targets.items():
-                if key in key_list:
-                    target_dict[key] = val[bz][mask[bz]]
-            targets_list.append(target_dict)
-        return targets_list
-
     def log_tensorboard(self, log_dict: Dict[str, Number], global_step: int, tag: str = ''):
-        if not misc.is_main_process():
-            return
         for key, value in log_dict.items():
             name = f'{tag}/{key}' if tag else key
             self.writer.add_scalar(name, value, global_step=global_step)
