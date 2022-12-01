@@ -14,7 +14,7 @@ import time
 from collections import defaultdict, deque
 import datetime
 import pickle
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 import torch
 import torch.distributed as dist
@@ -132,7 +132,7 @@ def all_gather(data):
     return data_list
 
 
-def reduce_dict(input_dict, average=True):
+def reduce_dict(input_dict, average=True) -> Dict[str, torch.Tensor]:
     """
     Args:
         input_dict (dict): all the values will be reduced
@@ -395,7 +395,7 @@ def get_world_size():
 def get_rank():
     if not is_dist_avail_and_initialized():
         return 0
-    return dist.get_rank()
+    return int(os.environ['LOCAL_RANK'])
 
 
 def is_main_process():
@@ -412,9 +412,24 @@ def init_distributed_mode(args):
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ['WORLD_SIZE'])
         args.gpu = int(os.environ['LOCAL_RANK'])
+        args.dist_url = 'env://'
     elif 'SLURM_PROCID' in os.environ:
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
+        proc_id = int(os.environ['SLURM_PROCID'])
+        ntasks = int(os.environ['SLURM_NTASKS'])
+        node_list = os.environ['SLURM_NODELIST']
+        num_gpus = torch.cuda.device_count()
+        addr = subprocess.getoutput(
+            'scontrol show hostname {} | head -n1'.format(node_list))
+        os.environ['MASTER_PORT'] = os.environ.get('MASTER_PORT', '29500')
+        os.environ['MASTER_ADDR'] = addr
+        os.environ['WORLD_SIZE'] = str(ntasks)
+        os.environ['RANK'] = str(proc_id)
+        os.environ['LOCAL_RANK'] = str(proc_id % num_gpus)
+        os.environ['LOCAL_SIZE'] = str(num_gpus)
+        args.dist_url = 'env://'
+        args.world_size = ntasks
+        args.rank = proc_id
+        args.gpu = proc_id % num_gpus
     else:
         print('Not using distributed mode')
         args.distributed = False
@@ -426,9 +441,9 @@ def init_distributed_mode(args):
     args.dist_backend = 'nccl'
     print('| distributed init (rank {}): {}'.format(
         args.rank, args.dist_url), flush=True)
-    torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                         world_size=args.world_size, rank=args.rank)
-    torch.distributed.barrier()
+    dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                            world_size=args.world_size, rank=args.rank)
+    dist.barrier()
     setup_for_distributed(args.rank == 0)
 
 

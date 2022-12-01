@@ -1,6 +1,8 @@
 import os
+from typing import Optional
+import logging
 import torch
-import torch.nn as nn
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 def model_state_to_cpu(model_state):
@@ -13,7 +15,7 @@ def model_state_to_cpu(model_state):
 def get_checkpoint_state(model=None, optimizer=None, epoch=None, best_result=None, best_epoch=None):
     optim_state = optimizer.state_dict() if optimizer is not None else None
     if model is not None:
-        if isinstance(model, torch.nn.DataParallel):
+        if isinstance(model, DDP):
             model_state = model_state_to_cpu(model.module.state_dict())
         else:
             model_state = model.state_dict()
@@ -24,22 +26,28 @@ def get_checkpoint_state(model=None, optimizer=None, epoch=None, best_result=Non
 
 
 def save_checkpoint(state, filename):
-    filename = '{}.pth'.format(filename)
+    filename = f'{filename}.pth'
+    logging.getLogger().info(f'Saving the checkpoint to {filename}...')
     torch.save(state, filename)
 
 
-def load_checkpoint(model, optimizer, filename, map_location, logger=None):
+def load_checkpoint(model, optimizer, filename, map_location, logger: Optional[logging.Logger] = None):
     if os.path.isfile(filename):
-        logger.info("==> Loading from checkpoint '{}'".format(filename))
+        if logger:
+            logger.info("==> Loading from checkpoint '{}'".format(filename))
         checkpoint = torch.load(filename, map_location)
         epoch = checkpoint.get('epoch', -1)
         best_result = checkpoint.get('best_result', 0.0)
         best_epoch = checkpoint.get('best_epoch', 0.0)
         if model is not None and checkpoint['model_state'] is not None:
-            model.load_state_dict(checkpoint['model_state'])
+            if isinstance(model, DDP):
+                model.module.load_state_dict(checkpoint['model_state'])
+            else:
+                model.load_state_dict(checkpoint['model_state'])
         if optimizer is not None and checkpoint['optimizer_state'] is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state'])
-        logger.info("==> Done")
+        if logger:
+            logger.info("==> Done")
     else:
         raise FileNotFoundError
 

@@ -1,10 +1,12 @@
+import torch
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.elastic.multiprocessing.errors import record
 import warnings
 warnings.filterwarnings("ignore")
 
 import os
 from pathlib import Path
 import sys
-import torch
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -22,8 +24,10 @@ from lib.helpers.trainer_helper import Trainer
 from lib.helpers.tester_helper import Tester
 from lib.helpers.utils_helper import create_logger
 from lib.helpers.utils_helper import set_random_seed
+from utils import misc
 
 
+@record
 def main(args):
     assert (os.path.exists(args.config))
     with open(args.config, 'r') as f:
@@ -37,20 +41,20 @@ def main(args):
         yaml.dump(cfg, f)
 
     log_file = os.path.join(output_path, 'train.log.%s' % datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-    logger = create_logger(log_file)
+
+    misc.init_distributed_mode(args)
+    logger = create_logger(log_file, rank=misc.get_rank())
+    logger.info(f'rank: {misc.get_rank()}')
 
     # build dataloader
     train_loader, test_loader = build_dataloader(cfg['dataset'])
 
     # build model
-    model, loss = build_model(cfg['model'])
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    gpu_ids = list(map(int, args.gpu.split(',')))
+    model, loss = build_model(cfg['model'], cfg['loss'])
+    device = torch.device("cuda", index=misc.get_rank())
+    model, loss = model.to(device), loss.to(device)
 
-    if len(gpu_ids) == 1:
-        model = model.to(device)
-    else:
-        model = torch.nn.DataParallel(model, device_ids=gpu_ids).to(device)
+    model = DDP(model, device_ids=[device])
 
     if args.evaluate_only:
         logger.info('###################  Evaluation Only  ##################')
@@ -58,6 +62,7 @@ def main(args):
                         model=model,
                         dataloader=test_loader,
                         logger=logger,
+                        device=device,
                         train_cfg=cfg['trainer'],
                         model_name=model_name)
         tester.test()
@@ -77,6 +82,7 @@ def main(args):
                       lr_scheduler=lr_scheduler,
                       warmup_lr_scheduler=warmup_lr_scheduler,
                       logger=logger,
+                      device=device,
                       loss=loss,
                       model_name=model_name)
 
@@ -84,13 +90,14 @@ def main(args):
                     model=trainer.model,
                     dataloader=test_loader,
                     logger=logger,
+                    device=device,
                     train_cfg=cfg['trainer'],
                     model_name=model_name)
     if cfg['dataset']['test_split'] != 'test':
         trainer.tester = tester
 
     logger.info('###################  Training  ##################')
-    logger.info('Batch Size: %d' % (cfg['dataset']['batch_size']))
+    logger.info('Batch Size per GPU: %d' % (cfg['dataset']['batch_size']))
     logger.info('Learning Rate: %f' % (cfg['optimizer']['lr']))
 
     trainer.train()
@@ -99,7 +106,7 @@ def main(args):
         return
 
     logger.info('###################  Testing  ##################')
-    logger.info('Batch Size: %d' % (cfg['dataset']['batch_size']))
+    logger.info('Batch Size per GPU: %d' % (cfg['dataset']['batch_size']))
     logger.info('Split: %s' % (cfg['dataset']['test_split']))
 
     tester.test()
@@ -109,8 +116,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
     parser.add_argument('-c', '--config', type=Path, help='settings of detection in yaml format')
     parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
-    parser.add_argument('-g', '--gpu', default='0')
-
+    parser.add_argument('--local_rank', type=int)
     args = parser.parse_args()
 
     main(args)

@@ -24,10 +24,10 @@ class KITTI_Dataset(data.Dataset):
     def __init__(self, split, cfg):
 
         # basic configuration
-        self.root_dir = cfg.get('root_dir')
+        self.root_dir = cfg['root_dir']
         self.split = split
         self.num_classes = 3
-        self.max_objs = 50
+        self.max_objs = cfg.get('max_objs', 50)
         self.class_name = ['Pedestrian', 'Car', 'Cyclist']
         self.cls2id = {'Pedestrian': 0, 'Car': 1, 'Cyclist': 2}
         self.resolution = np.array([1280, 384])  # W * H
@@ -222,6 +222,7 @@ class KITTI_Dataset(data.Dataset):
                 continue
 
             # process 2d bbox & get 2d center
+            # bbox_2d: (x_min, y_min, x_max, y_max)
             bbox_2d = objects[i].box2d.copy()
 
             # add affine transformation for 2d boxes.
@@ -239,6 +240,7 @@ class KITTI_Dataset(data.Dataset):
             if random_flip_flag and not self.aug_calib:  # random flip for center3d
                 center_3d[0] = img_size[0] - center_3d[0]
             center_3d = affine_transform(center_3d.reshape(-1), trans)
+            # center_3d: [x, y, z] in camera coordinate -> [u, v, d]
 
             # filter 3d center out of img
             proj_inside_img = True
@@ -248,7 +250,7 @@ class KITTI_Dataset(data.Dataset):
             if center_3d[1] < 0 or center_3d[1] >= self.resolution[1]:
                 proj_inside_img = False
 
-            if proj_inside_img == False:
+            if not proj_inside_img:
                 continue
 
             # class
@@ -259,6 +261,7 @@ class KITTI_Dataset(data.Dataset):
             w, h = bbox_2d[2] - bbox_2d[0], bbox_2d[3] - bbox_2d[1]
             size_2d[i] = 1. * w, 1. * h
 
+            # Normalizes to almost [0, 1] (input sizes may vary)
             center_2d_norm = center_2d / self.resolution
             size_2d_norm = size_2d[i] / self.resolution
 
@@ -310,12 +313,12 @@ class KITTI_Dataset(data.Dataset):
             'indices': indices,
             'img_size': img_size,
             'labels': labels,
-            'boxes': boxes,
-            'boxes_3d': boxes_3d,
+            'boxes': boxes,  # normalized (cx, cy, w, h)
+            'boxes_3d': boxes_3d,  # normalized (3d_cx, 3d_cy, l, r, t, b)
             'depth': depth,
-            'size_2d': size_2d,
-            'size_3d': size_3d,
-            'src_size_3d': src_size_3d,
+            'size_2d': size_2d,  # (w, h)
+            'size_3d': size_3d,  # real_size_3d - mean_size
+            'src_size_3d': src_size_3d,  # real_size_3d
             'heading_bin': heading_bin,
             'heading_res': heading_res,
             'mask_2d': mask_2d}

@@ -54,7 +54,7 @@ def decode_detections(dets, info, calibs, cls_mean_size, threshold):
     return results
 
 
-def extract_dets_from_outputs(outputs, K=50, topk=50):
+def extract_dets_from_outputs(outputs, topk=50):
     # get src outputs
 
     # b, q, c
@@ -70,7 +70,7 @@ def extract_dets_from_outputs(outputs, K=50, topk=50):
     topk_boxes = (topk_indexes // out_logits.shape[2]).unsqueeze(-1)
     # final labels
     labels = topk_indexes % out_logits.shape[2]
-    
+
     heading = outputs['pred_angle']
     size_3d = outputs['pred_3d_dim']
     depth = outputs['pred_depth'][:, :, 0: 1]
@@ -105,6 +105,7 @@ def extract_dets_from_outputs(outputs, K=50, topk=50):
     xs3d = xs3d.view(batch, -1, 1)
     ys3d = ys3d.view(batch, -1, 1)
 
+    # encoder              [1     + 1     + 1   + 1   + 2      + 1    + 24     + 3      + 1   + 1   + 1    ]
     detections = torch.cat([labels, scores, xs2d, ys2d, size_2d, depth, heading, size_3d, xs3d, ys3d, sigma], dim=2)
 
     return detections
