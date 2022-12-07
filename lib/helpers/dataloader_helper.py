@@ -38,7 +38,7 @@ def prepare_targets(targets: Dict[str, torch.Tensor], batch_size: int) -> List[D
     targets_list = []
     mask = targets['mask_2d']
 
-    key_list = ['labels', 'boxes', 'calibs', 'depth', 'size_3d', 'heading_bin', 'heading_res', 'boxes_3d']
+    key_list = ['labels', 'boxes', 'calibs', 'depth', 'size_3d', 'src_size_3d', 'heading_bin', 'heading_res', 'boxes_3d']
     for bz in range(batch_size):
         target_dict = {}
         for key, val in targets.items():
