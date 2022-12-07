@@ -1,5 +1,47 @@
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 import torch
+
+from lib.datasets.utils import class2angle
+
+
+def box_dict_to_xyzlwht(box_dict: Dict[str, torch.Tensor],
+                        is_target: Optional[bool] = True,
+                        mean_size: Optional[torch.Tensor] = None) -> torch.Tensor:
+    if is_target:
+        target_3dcenter = box_dict['boxes_3d'][..., :2]
+        target_src_dims = box_dict['src_size_3d']
+        # [num_boxes, 1]
+        target_depths = box_dict['depth']
+
+        # [num_boxes, 1]
+        target_heading_cls = box_dict['heading_bin']
+        # [num_boxes, 1]
+        target_heading_res = box_dict['heading_res']
+        # [num_boxes, 1]
+        target_heading_angle = class2angle(target_heading_cls, target_heading_res, to_label_format=True)
+
+        # [num_boxes, 7]
+        target_bboxes = torch.cat([target_3dcenter, target_depths, target_src_dims, target_heading_angle], dim=-1)
+        return target_bboxes
+
+    src_3dcenter = box_dict['pred_boxes'][..., :2]
+    src_depths = box_dict['pred_depth']
+    depth_input = src_depths[..., 0:1]
+
+    src_dims = box_dict['pred_3d_dim']
+    if mean_size is not None:
+        src_dims += mean_size
+
+    heading_input = box_dict['pred_angle']
+    heading_cls = heading_input[..., :heading_input.shape[-1] // 2].argmax(-1, keepdim=True)
+    # [num_boxes, 12]
+    heading_res = heading_input[..., heading_input.shape[-1] // 2:]
+    # [num_boxes, 1]
+    heading_res = heading_res.gather(dim=-1, index=heading_cls)
+    # [num_boxes, 1]
+    heading_angle = class2angle(heading_cls, heading_res, to_label_format=True)
+    bboxes = torch.cat([src_3dcenter, depth_input, src_dims, heading_angle], dim=-1)
+    return bboxes
 
 
 def rdiou(bboxes1: torch.Tensor, bboxes2: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -16,10 +58,10 @@ def rdiou(bboxes1: torch.Tensor, bboxes2: torch.Tensor) -> Tuple[torch.Tensor, t
         rdiou: A tensor with shape [*, num_boxes]. Each element represents the RDIoU of each pair of bboxes.
     """
     x1u, y1u, z1u = bboxes1[..., 0], bboxes1[..., 1], bboxes1[..., 2]
-    l1, w1, h1 = torch.exp(bboxes1[..., 3]), torch.exp(bboxes1[..., 4]), torch.exp(bboxes1[..., 5])  # test
+    l1, w1, h1 = bboxes1[..., 3], bboxes1[..., 4], bboxes1[..., 5]  # test
     t1 = torch.sin(bboxes1[..., 6]) * torch.cos(bboxes2[..., 6])
     x2u, y2u, z2u = bboxes2[..., 0], bboxes2[..., 1], bboxes2[..., 2]
-    l2, w2, h2 = torch.exp(bboxes2[..., 3]), torch.exp(bboxes2[..., 4]), torch.exp(bboxes2[..., 5])  # test
+    l2, w2, h2 = bboxes2[..., 3], bboxes2[..., 4], bboxes2[..., 5]  # test
     t2 = torch.cos(bboxes1[..., 6]) * torch.sin(bboxes2[..., 6])
 
     # we emperically scale the y/z to make their predictions more sensitive.
@@ -31,7 +73,7 @@ def rdiou(bboxes1: torch.Tensor, bboxes2: torch.Tensor) -> Tuple[torch.Tensor, t
     z2 = z2u * 2
 
     # clamp is necessray to aviod inf.
-    l1, w1, h1 = torch.clamp(l1, max=10), torch.clamp(w1, max=10), torch.clamp(h1, max=10)
+    l1, w1, h1 = torch.clamp(l1, max=50, min=1e-3), torch.clamp(w1, max=50, min=1e-3), torch.clamp(h1, max=50, min=1e-3)
     # emperically set to one to achieve the best performance
     j1, j2 = torch.ones_like(h2), torch.ones_like(h2)
 
