@@ -23,7 +23,7 @@ from .depthaware_transformer import build_depthaware_transformer
 from .depth_predictor import DepthPredictor
 from .depth_predictor.ddn_loss import DDNLoss
 from lib.losses.focal_loss import sigmoid_focal_loss
-from lib.losses.RDIoU import rdiou
+from lib.losses.RDIoU import rdiou, box_dict_to_xyzlwht
 
 
 def _get_clones(module, N):
@@ -300,11 +300,10 @@ class SetCriterion(nn.Module):
         self.focal_alpha = focal_alpha
         self.ddn_loss = DDNLoss()  # for depth map
 
-    def loss_labels(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
+    def loss_labels(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
         """Classification loss (Binary focal loss)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
         """
-        assert 'pred_logits' in outputs
         src_logits = outputs['pred_logits']
 
         idx = self._get_src_permutation_idx(indices)
@@ -323,7 +322,7 @@ class SetCriterion(nn.Module):
         return loss_cls
 
     @torch.no_grad()
-    def loss_cardinality(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
+    def loss_cardinality(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
         """ Compute the cardinality error, ie the absolute error in the number of predicted non-empty boxes
         This is not really a loss, it is intended for logging purposes only. It doesn't propagate gradients
         """
@@ -335,32 +334,27 @@ class SetCriterion(nn.Module):
         card_err = F.l1_loss(card_pred.float(), tgt_lengths.float())
         return card_err
 
-    def loss_3dcenter(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
-
-        idx = self._get_src_permutation_idx(indices)
-        src_3dcenter = outputs['pred_boxes'][:, :, 0: 2][idx]
-        target_3dcenter = torch.cat([t['boxes_3d'][:, 0: 2][i] for t, (_, i) in zip(targets, indices)], dim=0)
+    def loss_3dcenter(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        src_3dcenter = matched_outputs['pred_boxes'][..., :2]
+        target_3dcenter = matched_targets['boxes_3d'][..., :2]
 
         loss_3dcenter = F.l1_loss(src_3dcenter, target_3dcenter, reduction='sum') / num_boxes
         return loss_3dcenter
 
-    def loss_boxes(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
-
-        assert 'pred_boxes' in outputs
-        idx = self._get_src_permutation_idx(indices)
-        # (l ,r, t, b)
-        src_2dboxes = outputs['pred_boxes'][:, :, 2: 6][idx]
-        target_2dboxes = torch.cat([t['boxes_3d'][:, 2: 6][i] for t, (_, i) in zip(targets, indices)], dim=0)
+    def loss_boxes(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        src_2dboxes = matched_outputs['pred_boxes'][..., 2:6]
+        target_2dboxes = matched_targets['boxes_3d'][..., 2:6]
 
         # l1
         loss_bbox = F.l1_loss(src_2dboxes, target_2dboxes, reduction='sum') / num_boxes
         return loss_bbox
 
-    def loss_giou(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
-        idx = self._get_src_permutation_idx(indices)
-        # (3d_cx, 3d_cy, l, r, t, b)
-        src_boxes = outputs['pred_boxes'][idx]
-        target_boxes = torch.cat([t['boxes_3d'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+    def loss_giou(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        src_boxes = matched_outputs['pred_boxes']
+        target_boxes = matched_targets['boxes_3d']
         loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
             box_ops.box_cxcylrtb_to_xyxy(src_boxes),
             box_ops.box_cxcylrtb_to_xyxy(target_boxes)))
@@ -371,73 +365,32 @@ class SetCriterion(nn.Module):
                    outputs: Dict[str, torch.Tensor],
                    targets: List[Dict[str, torch.Tensor]],
                    indices: List[Tuple[torch.Tensor, torch.Tensor]],
-                   num_boxes: int) -> torch.Tensor:
-        idx = self._get_src_permutation_idx(indices)
-        # (3d_cx, 3d_cy), shape: [num_boxes, 2]
-        src_3dcenter = outputs['pred_boxes'][:, :, 0:2][idx]
-
-        # (depth, depth_log_variance)
-        src_depths = outputs['pred_depth'][idx]
-        # [num_boxes, 1]
-        depth_input = src_depths[..., 0:1]
-
-        # [num_boxes, 3]
-        src_dims = outputs['pred_3d_dim'][idx]
-
-        # [num_boxes, 24]
-        heading_input = outputs['pred_angle'][idx]
-        # [num_boxes, 1]
-        heading_cls = heading_input[..., :heading_input.shape[-1] // 2].argmax(-1, keepdim=True)
-        # [num_boxes, 12]
-        heading_res = heading_input[..., heading_input.shape[-1] // 2:]
-        # [num_boxes, 1]
-        heading_res = heading_res.gather(dim=-1, index=heading_cls)
-        # [num_boxes, 1]
-        heading_angle = class2angle(heading_cls, heading_res, to_label_format=True)
-
-        # [num_boxes, 7]
-        bboxes = torch.cat([src_3dcenter, depth_input, src_dims, heading_angle], dim=-1)
-
-        # [num_boxes, 2]
-        target_3dcenter = torch.cat([t['boxes_3d'][:, 0:2][i] for t, (_, i) in zip(targets, indices)], dim=0)
-
-        # [num_boxes, 1]
-        target_depths = torch.cat([t['depth'][i] for t, (_, i) in zip(targets, indices)], dim=0)
-
-        # [num_boxes, 3]
-        target_dims = torch.cat([t['size_3d'][i] for t, (_, i) in zip(targets, indices)], dim=0)
-
-        # [num_boxes, 1]
-        target_heading_cls = torch.cat([t['heading_bin'][i] for t, (_, i) in zip(targets, indices)], dim=0)
-        # [num_boxes, 1]
-        target_heading_res = torch.cat([t['heading_res'][i] for t, (_, i) in zip(targets, indices)], dim=0)
-        # [num_boxes, 1]
-        target_heading_angle = class2angle(target_heading_cls, target_heading_res, to_label_format=True)
-
-        # [num_boxes, 7]
-        target_bboxes = torch.cat([target_3dcenter, target_depths, target_dims, target_heading_angle], dim=-1)
+                   num_boxes: int,
+                   **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        mean_size = matched_targets['src_size_3d'] - matched_targets['size_3d']
+        bboxes = box_dict_to_xyzlwht(matched_outputs, is_target=False, mean_size=mean_size)
+        target_bboxes = box_dict_to_xyzlwht(matched_targets, is_target=True)
 
         center_distance_penalty, iou = rdiou(bboxes, target_bboxes)
         loss_rdiou = 1 - torch.clamp(iou - center_distance_penalty, min=-1.0, max=1.0)
         loss_rdiou = loss_rdiou.sum() / num_boxes
         return loss_rdiou
 
-    def loss_depths(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
-
-        idx = self._get_src_permutation_idx(indices)
-        src_depths = outputs['pred_depth'][idx]
-        target_depths = torch.cat([t['depth'][i] for t, (_, i) in zip(targets, indices)], dim=0).squeeze()
+    def loss_depths(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        src_depths = matched_outputs['pred_depth']
+        target_depths = matched_targets['depth'].squeeze()
 
         depth_input, depth_log_variance = src_depths[:, 0], src_depths[:, 1]
         depth_loss = 1.4142 * torch.exp(-depth_log_variance) * torch.abs(depth_input - target_depths) + depth_log_variance
         depth_loss = depth_loss.sum() / num_boxes
         return depth_loss
 
-    def loss_dims(self, outputs, targets, indices, num_boxes) -> torch.Tensor:
-
-        idx = self._get_src_permutation_idx(indices)
-        src_dims = outputs['pred_3d_dim'][idx]
-        target_dims = torch.cat([t['size_3d'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+    def loss_dims(self, outputs, targets, indices, num_boxes, **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        src_dims = matched_outputs['pred_3d_dim']
+        target_dims = matched_targets['size_3d']
 
         dimension = target_dims.clone().detach()
         dim_loss = torch.abs(src_dims - target_dims)
@@ -452,12 +405,12 @@ class SetCriterion(nn.Module):
                     outputs: Dict[str, torch.Tensor],
                     targets: List[Dict[str, torch.Tensor]],
                     indices: List[Tuple[torch.Tensor, torch.Tensor]],
-                    num_boxes: int) -> torch.Tensor:
-
-        idx = self._get_src_permutation_idx(indices)
-        heading_input = outputs['pred_angle'][idx]
-        target_heading_cls = torch.cat([t['heading_bin'][i] for t, (_, i) in zip(targets, indices)], dim=0)
-        target_heading_res = torch.cat([t['heading_res'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+                    num_boxes: int,
+                    **kwargs) -> torch.Tensor:
+        matched_outputs, matched_targets = kwargs['matched_outputs'], kwargs['matched_targets']
+        heading_input = matched_outputs['pred_angle']
+        target_heading_cls = matched_targets['heading_bin']
+        target_heading_res = matched_targets['heading_res']
 
         heading_input = heading_input.view(-1, 24)
         heading_target_cls = target_heading_cls.view(-1).long()
@@ -480,7 +433,8 @@ class SetCriterion(nn.Module):
                        outputs: Dict[str, torch.Tensor],
                        targets: List[Dict[str, torch.Tensor]],
                        indices: List[Tuple[torch.Tensor, torch.Tensor]],
-                       num_boxes: int) -> torch.Tensor:
+                       num_boxes: int,
+                       **kwargs) -> torch.Tensor:
         depth_map_logits = outputs['pred_depth_map_logits']
 
         num_gt_per_img = [len(t['boxes']) for t in targets]
@@ -522,6 +476,34 @@ class SetCriterion(nn.Module):
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
+    def _extract_matched_pairs(self,
+                               outputs: Dict[str, torch.Tensor],
+                               targets: List[Dict[str, torch.Tensor]],
+                               indices: List[Tuple[torch.Tensor, torch.Tensor]]
+                               ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+        """Extracts matched pairs from outputs and targets by indices.
+
+        Args:
+            outputs: A dict of tensors outputed by the model.
+            targets: A list of dicts, such that len(targets) == batch_size.
+            indices: A list of size batch_size, containing tuples of (index_i, index_j) where:
+                * index_i is the indices of the selected predictions (in order)
+                * index_j is the indices of the corresponding selected targets (in order)
+                For each batch element, it holds:
+                    len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
+
+        Returns:
+            (matched_outputs, matched_targets), both are dicts of tensors.
+            matched_outputs[key][i] is matched with matched_targets[key][i] for any key, i.
+            len(matched_outputs[key_i]) = len(matched_targets[key_j]) = num_boxes_among_whole_batch for any key_i, key_j.
+        """
+        idx = self._get_src_permutation_idx(indices)
+        matched_outputs = {k: v[idx] for k, v in outputs.items() if k != 'aux_outputs'}
+        matched_targets = {k: torch.cat([target[k][i] for target, (_, i) in zip(targets, indices)], dim=0)
+                           for k in targets[0]}
+
+        return matched_outputs, matched_targets
+
     def forward(self, outputs, targets) -> Tuple[Dict[str, torch.Tensor], Dict[str, Number]]:
         """This performs the loss computation.
 
@@ -538,6 +520,7 @@ class SetCriterion(nn.Module):
 
         # Retrieve the matching between the outputs of the last layer and the targets
         indices = self.matcher(outputs_without_aux, targets)
+        matched_outputs, matched_targets = self._extract_matched_pairs(outputs, targets, indices)
 
         device = next(iter(outputs.values())).device
         # Compute the average number of target boxes accross all nodes, for normalization purposes
@@ -550,7 +533,8 @@ class SetCriterion(nn.Module):
         losses = {}
         # Compute all the requested losses
         for loss_name in self.loss_names:
-            loss = self.get_loss(loss_name, outputs, targets, indices, num_boxes)
+            optional_params = dict(matched_outputs=matched_outputs, matched_targets=matched_targets)
+            loss = self.get_loss(loss_name, outputs, targets, indices, num_boxes, **optional_params)
             losses[loss_name] = loss * self.weight_dict[loss_name]
             unweighted_losses_log_dict[loss_name] = loss
 
@@ -558,11 +542,13 @@ class SetCriterion(nn.Module):
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets)
+                matched_outputs, matched_targets = self._extract_matched_pairs(aux_outputs, targets, indices)
+                optional_params = dict(matched_outputs=matched_outputs, matched_targets=matched_targets)
                 for loss_name in self.loss_names:
                     # Intermediate masks losses are too costly to compute, we ignore them.
                     if loss_name == 'loss_depth_map':
                         continue
-                    loss = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes)
+                    loss = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes, **optional_params)
                     losses[f'{loss_name}_{i}'] = loss * self.weight_dict[loss_name]
                     unweighted_losses_log_dict[f'{loss_name}_{i}'] = loss
 
