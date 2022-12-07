@@ -1,9 +1,13 @@
 ''' some auxiliary functions for all datasets '''
+from typing import TypeVar
 import numpy as np
 import cv2
+import torch
 
+T = TypeVar('T', float, np.ndarray, torch.Tensor)
 
 num_heading_bin = 12  # hyper param
+
 
 def angle2class(angle):
     ''' Convert continuous angle to discrete class and residual. '''
@@ -16,45 +20,45 @@ def angle2class(angle):
     return class_id, residual_angle
 
 
-def class2angle(cls, residual, to_label_format=False):
+def class2angle(cls: T, residual: T, to_label_format=False) -> T:
     ''' Inverse function to angle2class. '''
     angle_per_class = 2 * np.pi / float(num_heading_bin)
     angle_center = cls * angle_per_class
     angle = angle_center + residual
     if to_label_format:
         if isinstance(angle, float):
-            angle -= 2* np.pi
+            angle -= 2 * np.pi
         else:
-            angle[angle > np.pi] -= 2 * np.pi
+            angle[angle > np.pi] -= 2 * np.pi  # type: ignore
     return angle
 
 
 def gaussian_radius(bbox_size, min_overlap=0.7):
     height, width = bbox_size
 
-    a1  = 1
-    b1  = (height + width)
-    c1  = width * height * (1 - min_overlap) / (1 + min_overlap)
+    a1 = 1
+    b1 = (height + width)
+    c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
     sq1 = np.sqrt(b1 ** 2 - 4 * a1 * c1)
-    r1  = (b1 + sq1) / 2
+    r1 = (b1 + sq1) / 2
 
-    a2  = 4
-    b2  = 2 * (height + width)
-    c2  = (1 - min_overlap) * width * height
+    a2 = 4
+    b2 = 2 * (height + width)
+    c2 = (1 - min_overlap) * width * height
     sq2 = np.sqrt(b2 ** 2 - 4 * a2 * c2)
-    r2  = (b2 + sq2) / 2
+    r2 = (b2 + sq2) / 2
 
-    a3  = 4 * min_overlap
-    b3  = -2 * min_overlap * (height + width)
-    c3  = (min_overlap - 1) * width * height
+    a3 = 4 * min_overlap
+    b3 = -2 * min_overlap * (height + width)
+    c3 = (min_overlap - 1) * width * height
     sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
-    r3  = (b3 + sq3) / 2
+    r3 = (b3 + sq3) / 2
     return min(r1, r2, r3)
 
 
 def gaussian2D(shape, sigma=1):
     m, n = [(ss - 1.) / 2. for ss in shape]
-    y, x = np.ogrid[-m:m+1,-n:n+1]
+    y, x = np.ogrid[-m:m + 1, -n:n + 1]
 
     h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
     h[h < np.finfo(h.dtype).eps * h.max()] = 0
@@ -96,8 +100,8 @@ def draw_msra_gaussian(heatmap, center, sigma):
     img_x = max(0, ul[0]), min(br[0], h)
     img_y = max(0, ul[1]), min(br[1], w)
     heatmap[img_y[0]:img_y[1], img_x[0]:img_x[1]] = np.maximum(
-    heatmap[img_y[0]:img_y[1], img_x[0]:img_x[1]],
-    g[g_y[0]:g_y[1], g_x[0]:g_x[1]])
+        heatmap[img_y[0]:img_y[1], img_x[0]:img_x[1]],
+        g[g_y[0]:g_y[1], g_x[0]:g_x[1]])
     return heatmap
 
 
