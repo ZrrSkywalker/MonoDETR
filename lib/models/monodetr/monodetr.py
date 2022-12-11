@@ -596,7 +596,7 @@ def build(model_cfg, loss_cfg):
         init_box=model_cfg['init_box'])
 
     # matcher
-    matcher = build_matcher(model_cfg)
+    matcher = build_matcher(model_cfg['matcher'])
 
     # loss
     weight_dict = loss_cfg['weights']

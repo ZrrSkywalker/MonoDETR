@@ -6,6 +6,7 @@
 import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
+from lib.losses.RDIoU import box_dict_to_xyzlwht, rdiou
 
 from utils.box_ops import box_cxcywh_to_xyxy, generalized_box_iou, box_xyxy_to_cxcywh, box_cxcylrtb_to_xyxy
 
@@ -17,7 +18,7 @@ class HungarianMatcher(nn.Module):
     while the others are un-matched (and thus treated as non-objects).
     """
 
-    def __init__(self, cost_class: float = 1, cost_3dcenter: float = 1, cost_bbox: float = 1, cost_giou: float = 1):
+    def __init__(self, cost_class: float = 1, cost_3dcenter: float = 1, cost_bbox: float = 1, cost_giou: float = 1, cost_rdiou: float = 1):
         """Creates the matcher
         Params:
             cost_class: This is the relative weight of the classification error in the matching cost
@@ -29,6 +30,7 @@ class HungarianMatcher(nn.Module):
         self.cost_3dcenter = cost_3dcenter
         self.cost_bbox = cost_bbox
         self.cost_giou = cost_giou
+        self.cost_rdiou = cost_rdiou
         assert cost_class != 0 or cost_bbox != 0 or cost_giou != 0, "all costs cant be 0"
 
     @torch.no_grad()
@@ -81,8 +83,24 @@ class HungarianMatcher(nn.Module):
         tgt_bbox = torch.cat([v["boxes_3d"] for v in targets])
         cost_giou = -generalized_box_iou(box_cxcylrtb_to_xyxy(out_bbox), box_cxcylrtb_to_xyxy(tgt_bbox))
 
+        # Compute the rdiou cost between boxes
+        # [batch_size * num_queries, 1, 7]
+        out_xyzlhwt = box_dict_to_xyzlwht(outputs, is_target=False).view(-1, 1, 7)
+        # [1, num_target_boxes, 7]
+        tgt_xyzlhwt = box_dict_to_xyzlwht(targets).view(1, -1, 7)
+        _, num_target_boxes, _ = tgt_xyzlhwt.shape
+        # [batch_size * num_queries, num_target_boxes, 7], [num_target_boxes, batch_size * num_queries, 7]
+        out_xyzlhwt, tgt_xyzlhwt = torch.broadcast_tensors(out_xyzlhwt, tgt_xyzlhwt)
+        # [batch_size * num_queries * num_target_boxes, 7], [num_target_boxes * batch_size * num_queries, 7]
+        out_xyzlhwt, tgt_xyzlhwt = out_xyzlhwt.flatten(0, 1), tgt_xyzlhwt.flatten(0, 1)
+        center_distance_penalty, iou = rdiou(out_xyzlhwt, tgt_xyzlhwt)
+        # [batch_size * num_queries]
+        cost_rdiou = 1 - torch.clamp(iou - center_distance_penalty, min=-1.0, max=1.0)
+        # [batch_size * num_queries, num_target_boxes]
+        cost_rdiou = cost_rdiou.view(bs * num_queries, num_target_boxes)
+
         # Final cost matrix
-        C = self.cost_bbox * cost_bbox + self.cost_3dcenter * cost_3dcenter + self.cost_class * cost_class + self.cost_giou * cost_giou
+        C = self.cost_bbox * cost_bbox + self.cost_3dcenter * cost_3dcenter + self.cost_class * cost_class + self.cost_giou * cost_giou + self.cost_rdiou * cost_rdiou
         C = C.view(bs, num_queries, -1).cpu()
 
         sizes = [len(v["boxes"]) for v in targets]
@@ -92,7 +110,8 @@ class HungarianMatcher(nn.Module):
 
 def build_matcher(cfg):
     return HungarianMatcher(
-        cost_class=cfg['set_cost_class'],
-        cost_bbox=cfg['set_cost_bbox'],
-        cost_3dcenter=cfg['set_cost_3dcenter'],
-        cost_giou=cfg['set_cost_giou'])
+        cost_class=cfg['cost_class'],
+        cost_bbox=cfg['cost_bbox'],
+        cost_3dcenter=cfg['cost_3dcenter'],
+        cost_giou=cfg['cost_giou'],
+        cost_rdiou=cfg['cost_rdiou'])
