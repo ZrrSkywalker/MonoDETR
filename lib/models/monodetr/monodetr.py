@@ -64,6 +64,9 @@ class MonoDETR(nn.Module):
         self.dim_embed_3d = MLP(hidden_dim, hidden_dim, 3, 2)  # [h, w, l] - mean_size
         self.angle_embed = MLP(hidden_dim, hidden_dim, 24, 2)  # 12 classes + 12 offset for each classes
         self.depth_embed = MLP(hidden_dim, hidden_dim, 2, 2)  # depth and deviation
+        self.depth_ave_layer = nn.Linear(3, 1)
+        nn.init.constant_(self.depth_ave_layer.weight, 1 / 3)
+        nn.init.zeros_(self.depth_ave_layer.bias)
 
         if init_box:
             nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
@@ -233,8 +236,9 @@ class MonoDETR(nn.Module):
                 align_corners=True).squeeze(1)
 
             # depth average + sigma
-            depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3,
-                                   depth_reg[:, :, 1: 2]], -1)
+            # depth_ave = ((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3
+            depth_ave = self.depth_ave_layer(torch.cat([(1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.), depth_geo.unsqueeze(-1), depth_map], dim=-1))
+            depth_ave = torch.cat([depth_ave, depth_reg[:, :, 1: 2]], -1)
             outputs_depths.append(depth_ave)
 
             # angles
