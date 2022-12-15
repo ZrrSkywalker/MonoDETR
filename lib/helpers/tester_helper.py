@@ -128,7 +128,7 @@ class Tester(object):
         self.logger.info(f'Inference on {len(self.dataloader)} images by {model_infer_time / len(self.dataloader)}/per image.')
 
         # save the result for evaluation.
-        self.logger.info('==> Saving ...')
+        self.logger.info(f"==> Saving to {os.path.join(self.output_dir, 'outputs', 'data')}...")
         self.save_results(results)
         return log_dict
 
