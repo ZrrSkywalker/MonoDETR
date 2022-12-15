@@ -79,9 +79,7 @@ model:
   set_cost_3dcenter: 10
 
 loss:
-  losses:
-    [
-      cardinality_error,
+  losses: [
       loss_angle,
       loss_bbox,
       loss_center,
@@ -122,6 +120,7 @@ trainer:
   save_frequency: 1 # checkpoint save interval (in epoch)
   # resume_model: True
   # pretrain_model: runs/monodetr2/checkpoint_best.pth
+  log_frequency: 5 # tensorboard log frequency (per epoch) (1 ~ 100)
   save_path: "./runs/"
   save_all: False # False for only savng the best and latest ckpts
 
