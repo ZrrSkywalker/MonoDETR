@@ -102,7 +102,12 @@ loss:
     loss_depth_map: 1 # DDN loss
     loss_dim: 1
     loss_giou: 2 # 3D boxes to 2D boxes IoU
-    loss_rdiou: 1
+    loss_rdiou: 2
+
+regularization:
+  loss: [depth_embed_regularization]
+  weight:
+    depth_embed_regularization: 1e-3
 
 optimizer:
   type: "adamw"

@@ -2,6 +2,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.elastic.multiprocessing.errors import record
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import os
@@ -19,6 +20,7 @@ import datetime
 from lib.helpers.model_helper import build_model
 from lib.helpers.dataloader_helper import build_dataloader
 from lib.helpers.optimizer_helper import build_optimizer
+from lib.helpers.regularization_helper import build_regularization
 from lib.helpers.scheduler_helper import build_lr_scheduler
 from lib.helpers.trainer_helper import Trainer
 from lib.helpers.tester_helper import Tester
@@ -74,6 +76,9 @@ def main(args):
     # build lr scheduler
     lr_scheduler, warmup_lr_scheduler = build_lr_scheduler(cfg['lr_scheduler'], optimizer, last_epoch=-1)
 
+    # build regularization. regularization can be null.
+    regularization = build_regularization(cfg['regularization']) if 'regularization' in cfg else None
+
     trainer = Trainer(cfg=cfg['trainer'],
                       model=model,
                       optimizer=optimizer,
@@ -81,6 +86,7 @@ def main(args):
                       test_loader=test_loader,
                       lr_scheduler=lr_scheduler,
                       warmup_lr_scheduler=warmup_lr_scheduler,
+                      regularization=regularization,
                       logger=logger,
                       device=device,
                       loss=loss,

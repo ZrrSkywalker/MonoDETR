@@ -13,6 +13,7 @@ import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
 from lib.helpers.dataloader_helper import prepare_targets
+from lib.helpers.regularization_helper import Regularization
 from lib.helpers.save_helper import get_checkpoint_state
 from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.save_helper import save_checkpoint
@@ -32,6 +33,7 @@ class Trainer(object):
                  logger: logging.Logger,
                  device: torch.device,
                  loss: SetCriterion,
+                 regularization: Optional[Regularization],
                  model_name: str,
                  with_tensorboard: bool = True):
         self.cfg = cfg
@@ -47,6 +49,7 @@ class Trainer(object):
         self.best_epoch = 0
         self.device = device
         self.detr_loss = loss
+        self.regularization = regularization
         self.model_name = model_name
         self.output_dir = os.path.join('./' + cfg['save_path'], model_name)
         self.tester = None
@@ -160,16 +163,25 @@ class Trainer(object):
             outputs = self.model(inputs, calibs, img_sizes)
 
             detr_losses_dict, unweighted_losses_log_dict = self.detr_loss(outputs, targets)
-
             detr_losses = torch.stack(list(detr_losses_dict.values())).sum()
+            if self.regularization is not None:
+                regularization_dict, unweighted_regularization_log_dict = self.regularization(self.model)
+                detr_losses += torch.stack(list(regularization_dict.values())).sum()
+            else:
+                unweighted_regularization_log_dict = {}
 
             unweighted_losses_log_dict['loss_detr'] = detr_losses.item()
 
             if batch_idx in steps_to_log:
                 if self.with_tensorboard:
+                    global_step = epoch * 100 + int(batch_idx / len(self.train_loader) * 100)
                     self.log_tensorboard(
                         unweighted_losses_log_dict,
-                        global_step=epoch * 100 + int(batch_idx / len(self.train_loader) * 100),
+                        global_step=global_step,
+                        tag='train')
+                    self.log_tensorboard(
+                        unweighted_regularization_log_dict,
+                        global_step=global_step,
                         tag='train')
 
             detr_losses.backward()
