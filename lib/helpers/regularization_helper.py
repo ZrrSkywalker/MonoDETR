@@ -62,4 +62,4 @@ class Regularization(nn.Module):
 
 
 def build_regularization(cfg):
-    return Regularization(loss_names=cfg['loss'], weight_dict=cfg['weight'], loss_args=cfg.get('args', {}))
+    return Regularization(loss_names=cfg['losses'], weight_dict=cfg['weights'], loss_args=cfg.get('args', {}))
