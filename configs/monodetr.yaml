@@ -23,7 +23,7 @@ dataset:
   scale: 0.05
   shift: 0.05
 
-model_name: "monodetr_rdiou"
+model_name: "monodetr_rdiou_giou_matched_targets_depth_ave_regularization_0.001_num_group_members_3"
 
 model:
   num_classes: 3
@@ -73,10 +73,16 @@ model:
   # depth_map_loss_coef: 1
 
   # Matcher
-  set_cost_class: 2
-  set_cost_bbox: 5
-  set_cost_giou: 2
-  set_cost_3dcenter: 10
+  # set_cost_class: 2
+  # set_cost_bbox: 5
+  # set_cost_giou: 2
+  # set_cost_3dcenter: 10
+  matcher:
+    cost_class: 2
+    cost_bbox: 5
+    cost_giou: 2
+    cost_3dcenter: 10
+    cost_rdiou: 2
 
 loss:
   losses: [
@@ -105,9 +111,13 @@ loss:
     loss_rdiou: 2
 
 regularization:
-  loss: [depth_embed_regularization]
-  weight:
-    depth_embed_regularization: 1e-3
+  losses: [depth_embed_regularization]
+  weights:
+    depth_embed_regularization: 1.e-3
+  args:
+    depth_embed_regularization:
+      num_group_members: 3
+      margin: 1
 
 optimizer:
   type: "adamw"
