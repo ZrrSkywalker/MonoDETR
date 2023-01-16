@@ -19,9 +19,9 @@ class Regularization(nn.Module):
         }
         assert len(self.weight_dict) == len(self.loss_names), f'The length of `weight_dict`({len(self.weight_dict)}) and `loss_names`({len(self.loss_names)}) should be consistent.'
 
-    def depth_embed_regularization(self, model, margin: float = 1.) -> torch.Tensor:
+    def depth_embed_regularization(self, model, num_group_members: int = 5, margin: float = 1., p: int = 1) -> torch.Tensor:
         weight: torch.Tensor = model.depth_predictor.depth_pos_embed.weight
-        num_group_members = 5
+        num_group_members = num_group_members
         loss = weight.new_zeros(1)
         num_samples = 0
         for i in range(0, len(weight), num_group_members):
@@ -37,7 +37,7 @@ class Regularization(nn.Module):
             anchors = anchors.flatten(0, -2)
             positives = positives.flatten(0, -2)
             negatives = negatives.flatten(0, -2)
-            loss += F.triplet_margin_loss(anchors, positives, negatives, margin=margin, p=1, reduction='sum')
+            loss += F.triplet_margin_loss(anchors, positives, negatives, margin=margin, p=p, reduction='sum')
             num_samples += anchors.shape[0]
 
         loss /= num_samples
