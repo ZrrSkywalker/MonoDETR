@@ -41,9 +41,9 @@ def load_checkpoint(model, optimizer, filename, map_location, logger: Optional[l
         best_epoch = checkpoint.get('best_epoch', 0.0)
         if model is not None and checkpoint['model_state'] is not None:
             if isinstance(model, DDP):
-                model.module.load_state_dict(checkpoint['model_state'])
+                model.module.load_state_dict(checkpoint['model_state'], strict=False)
             else:
-                model.load_state_dict(checkpoint['model_state'])
+                model.load_state_dict(checkpoint['model_state'], strict=False)
         if optimizer is not None and checkpoint['optimizer_state'] is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state'])
         if logger:
