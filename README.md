@@ -10,6 +10,10 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 </div>
 
 ## Main Results
+This repo contains only an intermediate version of MonoDETR. Our paper is still under review, but has been **intentionally plagiarized** by several times in character level, submitting to NeurIPS, CVPR, and other conferences.
+Given this, we plan to release the complete code after our paper been accepted.
+Thanks for your understanding.
+
 The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is still under tuned)
 
 **We have relased the ckpts of our implementation for reproducibility. The module names might have some mismatch, which will be rectified in a few days.**
