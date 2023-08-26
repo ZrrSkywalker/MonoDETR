@@ -86,8 +86,9 @@ The results in this repo:
     ```
     
 2. Install pytorch and torchvision matching your CUDA version:
-    ```
+    ```bash
     conda install pytorch torchvision cudatoolkit
+    # We adopt torch 1.9.0+cu111
     ```
     
 3. Install requirements and compile the deformable attention:
