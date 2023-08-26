@@ -1,10 +1,10 @@
 # MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection
 Official implementation of ['MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection'](https://arxiv.org/pdf/2203.13310.pdf).
 
-The paper has been accepted by **ICCV 2023** 🔥.
+The paper has been accepted by **ICCV 2023** 🎉.
 
 ## News
-* **[2023-08]** A ***More Stable Version*** 🌟 of MonoDETR on KITTI is now released!
+* **[2023-08]** A ***More Stable Version*** 🌟 of MonoDETR on KITTI is now released! 🔥🔥🔥
 * **[2022-04]** The initial code of MonoDETR on KITTI is released
 
 ## Introduction
@@ -55,22 +55,22 @@ The results in this repo:
         <td div align="center">28.79%</td> 
         <td div align="center">20.83%</td> 
         <td div align="center">17.47%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
-        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1U2l2nYMOc6pTgASuck1PM9MOCyfEJwwE/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1d8fbAt-CQF-IN8UEHuw3NimmfONhH6iA/view?usp=sharing">ckpt</a></td>
     </tr>  
   <tr>
         <td div align="center">29.36%</td> 
         <td div align="center">20.64%</td> 
         <td div align="center">17.30%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
-        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1HbezCRjc8-sut80yPwUdIK8bilV3lyrx/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1kT17M-IaquLiOG8QNw9n3qCtNsnqk-21/view?usp=sharing">ckpt</a></td>
     </tr>  
   <tr>
         <td div align="center">27.58%</td> 
         <td div align="center">20.14%</td> 
         <td div align="center">16.98%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
-        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1EbUpPmRT7AkL-BHOvyM67Wz1GDY_MuJZ/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1EbUpPmRT7AkL-BHOvyM67Wz1GDY_MuJZ/view?usp=sharing">ckpt</a></td>
     </tr>  
 </table>
 
