@@ -4,7 +4,7 @@ Official implementation of ['MonoDETR: Depth-guided Transformer for Monocular 3D
 The paper has been accepted by **ICCV 2023** 🔥.
 
 ## News
-* **[2023-08]** A ***more stable version*** of MonoDETR on KITTI is now released 🔥
+* **[2023-08]** A ***More Stable Version*** 🌟 of MonoDETR on KITTI is now released!
 * **[2022-04]** The initial code of MonoDETR on KITTI is released
 
 ## Introduction
@@ -15,9 +15,29 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 
 ## Main Results
 
-Note that the randomness of training for monocular detection would cause a variance of ±1 AP<sub>3D</sub> on KITTI's *val* set.
+Note that the randomness of training for monocular detection would cause a variance of ±1 AP<sub>3D</sub> on KITTI.
 
+The results in the paper:
 
+<table>
+    <tr>
+        <td rowspan="2",div align="center">Models</td>
+        <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>   
+    </tr>
+    <tr>
+        <td div align="center">Easy</td> 
+        <td div align="center">Mod.</td> 
+        <td div align="center">Hard</td> 
+    </tr>
+    <tr>
+        <td rowspan="4",div align="center">MonoDETR</td>
+        <td div align="center">28.84%</td> 
+        <td div align="center">20.61%</td> 
+        <td div align="center">16.38%</td> 
+    </tr>  
+</table>
+
+The results in this repo:
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
@@ -116,9 +136,9 @@ This repo benefits from the excellent [Deformable-DETR](https://github.com/funda
 ## Citation
 ```bash
 @article{zhang2022monodetr,
-  title={MonoDETR: Depth-aware Transformer for Monocular 3D Object Detection},
+  title={MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection},
   author={Zhang, Renrui and Qiu, Han and Wang, Tai and Xu, Xuanzhuo and Guo, Ziyu and Qiao, Yu and Gao, Peng and Li, Hongsheng},
-  journal={arXiv preprint arXiv:2203.13310},
+  journal={ICCV 2023},
   year={2022}
 }
 ```
