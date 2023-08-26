@@ -10,7 +10,7 @@ The paper has been accepted by **ICCV 2023** 🔥.
 ## Introduction
 MonoDETR is the **first DETR-based model** for monocular 3D detection **without additional depth supervision, anchors or NMS**. We enable the vanilla transformer in DETR to be depth-guided and achieve scene-level geometric perception. In this way, each object estimates its 3D attributes adaptively from the depth-informative regions on the image, not limited by center-around features.
 <div align="center">
-  <img src="pipeline.jpg"/>
+  <img src="main_fig.png"/>
 </div>
 
 ## Main Results
