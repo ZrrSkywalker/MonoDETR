@@ -1,22 +1,22 @@
 # MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection
-Official implementation of the paper ['MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection'](https://arxiv.org/pdf/2203.13310.pdf).
+Official implementation of ['MonoDETR: Depth-guided Transformer for Monocular 3D Object Detection'](https://arxiv.org/pdf/2203.13310.pdf).
 
-**For our multi-view version, MonoDETR-MV on nuScenes dataset, please refer to [MonoDETR-MV](https://github.com/ZrrSkywalker/MonoDETR-MV).**
+The paper has been accepted by **ICCV 2023** 🔥.
+
+## News
+* **[2023-08]** A ***more stable version*** of MonoDETR on KITTI is now released 🔥
+* **[2022-04]** The initial code of MonoDETR on KITTI is released
 
 ## Introduction
-MonoDETR is the **first DETR-based model** for monocular 3D detection **without additional depth supervision, anchors or NMS**, which achieves leading performance on KITTI *val* and *test* set. We enable the vanilla transformer in DETR to be depth-aware and enforce the whole detection process guided by depth. In this way, each object estimates its 3D attributes adaptively from the depth-informative regions on the image, not limited by center-around features.
+MonoDETR is the **first DETR-based model** for monocular 3D detection **without additional depth supervision, anchors or NMS**. We enable the vanilla transformer in DETR to be depth-guided and achieve scene-level geometric perception. In this way, each object estimates its 3D attributes adaptively from the depth-informative regions on the image, not limited by center-around features.
 <div align="center">
   <img src="pipeline.jpg"/>
 </div>
 
 ## Main Results
-This repo contains only an intermediate version of MonoDETR. Our paper is still under review, but has been **intentionally plagiarized** by several times in character level, submitting to NeurIPS, CVPR, and other conferences.
-Given this, we plan to release the complete code after our paper been accepted.
-Thanks for your understanding.
 
-The randomness of training for monocular detection would cause the variance of ±1 AP<sub>3D</sub>. For reproducibility, we provide four training logs of MonoDETR on KITTI *val* set for the car category: (the stable version is still under tuned)
+Note that the randomness of training for monocular detection would cause a variance of ±1 AP<sub>3D</sub> on KITTI's *val* set.
 
-**We have relased the ckpts of our implementation for reproducibility. The module names might have some mismatch, which will be rectified in a few days.**
 
 <table>
     <tr>
@@ -32,58 +32,26 @@ The randomness of training for monocular detection would cause the variance of �
     </tr>
     <tr>
         <td rowspan="4",div align="center">MonoDETR</td>
-        <td div align="center">28.84%</td> 
-        <td div align="center">20.61%</td> 
-        <td div align="center">16.38%</td> 
+        <td div align="center">28.79%</td> 
+        <td div align="center">20.83%</td> 
+        <td div align="center">17.47%</td> 
         <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
     </tr>  
-    <tr>
-        <td div align="center">26.66%</td> 
+  <tr>
+        <td div align="center">29.36%</td> 
+        <td div align="center">20.64%</td> 
+        <td div align="center">17.30%</td> 
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
+    </tr>  
+  <tr>
+        <td div align="center">27.58%</td> 
         <td div align="center">20.14%</td> 
-        <td div align="center">16.88%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/1gSof60oOnno_qAHRViXKQ6CyqRI7O0tr/view?usp=sharing">log</a></td>
+        <td div align="center">16.98%</td> 
+        <td div align="center"><a href="https://drive.google.com/file/d/124u2WW_DqDyKrpUe3lQ8TR6xth8rn9YH/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
-    </tr> 
-    <tr>
-        <td div align="center">29.53%</td> 
-        <td div align="center">20.13%</td> 
-        <td div align="center">16.57%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/1rrayzzwHGpddE1f_mfvq0RQb5xpWcPAL/view?usp=sharing">log</a></td>
-        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
-    </tr> 
-    <tr>
-        <td div align="center">27.11%</td> 
-        <td div align="center">20.08%</td> 
-        <td div align="center">16.18%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/1D6IOkscfypGSEbsXcHZ60-q492zvMLp7/view?usp=sharing">log</a></td>
-        <td div align="center"><a href="https://drive.google.com/drive/folders/1eIQtH3RzJqOCHm9hwgmjmQAnG5qJNFCN?usp=sharing">ckpt</a></td>
-    </tr> 
-</table>
-
-MonoDETR on *test* set from official [KITTI benckmark](http://www.cvlibs.net/datasets/kitti/eval_object_detail.php?&result=22a0e176d4f7794e7c142c93f4f8891749aa738f) for the car category:
-<table>
-    <tr>
-        <td rowspan="2",div align="center">Models</td>
-        <td colspan="3",div align="center">Test, AP<sub>3D|R40</sub></td>   
-    </tr>
-    <tr>
-        <td div align="center">Easy</td> 
-        <td div align="center">Mod.</td> 
-        <td div align="center">Hard</td> 
-    </tr>
-    <tr>
-        <td rowspan="2",div align="center">MonoDETR</td>
-        <td div align="center">24.52%</td> 
-        <td div align="center">16.26%</td> 
-        <td div align="center">13.93%</td> 
     </tr>  
-    <tr>
-        <td div align="center">25.00%</td> 
-        <td div align="center">16.47%</td> 
-        <td div align="center">13.58%</td> 
-    </tr>  
-    
 </table>
 
 
@@ -132,7 +100,7 @@ MonoDETR on *test* set from official [KITTI benckmark](http://www.cvlibs.net/dat
 ## Get Started
 
 ### Train
-You can modify the settings of models and training in `configs/monodetr.yaml` and appoint the GPU in `train.sh`:
+You can modify the settings of models and training in `configs/monodetr.yaml` and indicate the GPU in `train.sh`:
 
     bash train.sh configs/monodetr.yaml > logs/monodetr.log
    
@@ -156,4 +124,4 @@ This repo benefits from the excellent [Deformable-DETR](https://github.com/funda
 ```
 
 ## Contact
-If you have any question about this project, please feel free to contact zhangrenrui@pjlab.org.cn.
+If you have any questions about this project, please feel free to contact zhangrenrui@pjlab.org.cn.
