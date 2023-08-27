@@ -69,7 +69,7 @@ The results in this repo:
         <td div align="center">27.58%</td> 
         <td div align="center">20.14%</td> 
         <td div align="center">16.98%</td> 
-        <td div align="center"><a href="https://drive.google.com/file/d/1EbUpPmRT7AkL-BHOvyM67Wz1GDY_MuJZ/view?usp=sharing">log</a></td>
+        <td div align="center"><a href="https://drive.google.com/file/d/1WqEkIFBVR9iVdGwn4vQ68U0lHXrZp6tQ/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/file/d/1EbUpPmRT7AkL-BHOvyM67Wz1GDY_MuJZ/view?usp=sharing">ckpt</a></td>
     </tr>  
 </table>
