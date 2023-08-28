@@ -17,7 +17,7 @@ MonoDETR is the **first DETR-based model** for monocular 3D detection **without 
 
 Note that the randomness of training for monocular detection would cause a variance of ±1 AP<sub>3D</sub> on KITTI.
 
-The results in the paper:
+The official results in the paper:
 
 <table>
     <tr>
@@ -37,7 +37,7 @@ The results in the paper:
     </tr>  
 </table>
 
-The results in this repo:
+New and better results in this repo:
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
