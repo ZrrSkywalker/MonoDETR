@@ -532,6 +532,18 @@ class SetCriterion(nn.Module):
         return losses
 
 
+class ExtendedSetCriterion(SetCriterion):
+    def __init__(self, num_classes, matcher, weight_dict, focal_alpha, losses, group_num=11):
+        """ Create the criterion.
+        Parameters:
+            num_classes: number of object categories, omitting the special no-object category
+            matcher: module able to compute a matching between targets and proposals
+            weight_dict: dict containing as key the names of the losses and as values their relative weight.
+            losses: list of all the losses to be applied. See get_loss for list of available losses.
+            focal_alpha: alpha in Focal Loss
+        """
+        super().__init__(num_classes, matcher, weight_dict, focal_alpha, losses, group_num=11)
+
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
 
