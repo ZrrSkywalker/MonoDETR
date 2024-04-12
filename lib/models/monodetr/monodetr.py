@@ -7,6 +7,7 @@ from torch import nn
 import math
 import copy
 
+from typing import List
 from utils import box_ops
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list,
                             accuracy, get_world_size, interpolate,
@@ -312,10 +313,21 @@ class SetCriterion(nn.Module):
         self.num_classes = num_classes
         self.matcher = matcher
         self.weight_dict = weight_dict
-        self.losses = losses
+        self.applied_losses:List[str] = losses # list with the keys (names) of losses
         self.focal_alpha = focal_alpha
         self.ddn_loss = DDNLoss()  # for depth map
         self.group_num = group_num
+
+        self.loss_map = {
+            'labels': self.loss_labels,
+            'cardinality': self.loss_cardinality,
+            'boxes': self.loss_boxes,
+            'depths': self.loss_depths,
+            'dims': self.loss_dims,
+            'angles': self.loss_angles,
+            'center': self.loss_3dcenter,
+            'depth_map': self.loss_depth_map,
+        }
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (Binary focal loss)
@@ -471,21 +483,25 @@ class SetCriterion(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
-        
-        loss_map = {
-            'labels': self.loss_labels,
-            'cardinality': self.loss_cardinality,
-            'boxes': self.loss_boxes,
-            'depths': self.loss_depths,
-            'dims': self.loss_dims,
-            'angles': self.loss_angles,
-            'center': self.loss_3dcenter,
-            'depth_map': self.loss_depth_map,
-        }
+    def get_loss(self, loss_name:str, outputs, targets, indices, num_boxes, **kwargs)->dict:
+        """
+        returns a dictionary ('loss_<loss_name>', loss_value),
+            except for depth_loss which return a 'DDNLoss' object
+        """
+        # loss_map = {
+        #     'labels': self.loss_labels,
+        #     'cardinality': self.loss_cardinality,
+        #     'boxes': self.loss_boxes,
+        #     'depths': self.loss_depths,
+        #     'dims': self.loss_dims,
+        #     'angles': self.loss_angles,
+        #     'center': self.loss_3dcenter,
+        #     'depth_map': self.loss_depth_map,
+        # }
 
-        assert loss in loss_map, f'do you really want to compute {loss} loss?'
-        return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
+        assert loss_name in self.loss_map, f'{loss_name} not found in loss map.'
+
+        return self.loss_map[loss_name](outputs, targets, indices, num_boxes, **kwargs)
 
     def forward(self, outputs, targets, mask_dict=None):
         """ This performs the loss computation.
@@ -510,30 +526,30 @@ class SetCriterion(nn.Module):
         # Compute all the requested losses
 
         losses = {}
-        for loss in self.losses:
+        for loss_name in self.applied_losses:
             #ipdb.set_trace()
-            losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
+            losses.update(self.get_loss(loss_name, outputs, targets, indices, num_boxes))
 
         # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets, group_num=group_num)
-                for loss in self.losses:
-                    if loss == 'depth_map':
+                for loss_name in self.applied_losses:
+                    if loss_name == 'depth_map':
                         # Intermediate masks losses are too costly to compute, we ignore them.
                         continue
                     kwargs = {}
-                    if loss == 'labels':
+                    if loss_name == 'labels':
                         # Logging is enabled only for the last layer
                         kwargs = {'log': False}
-                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, **kwargs)
+                    l_dict = self.get_loss(loss_name, aux_outputs, targets, indices, num_boxes, **kwargs)
                     l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
         return losses
 
 
 class ExtendedSetCriterion(SetCriterion):
-    def __init__(self, num_classes, matcher, weight_dict, focal_alpha, losses, group_num=11):
+    def __init__(self, num_classes, matcher, weight_dict, focal_alpha, applied_losses, group_num=11):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -542,7 +558,23 @@ class ExtendedSetCriterion(SetCriterion):
             losses: list of all the losses to be applied. See get_loss for list of available losses.
             focal_alpha: alpha in Focal Loss
         """
-        super().__init__(num_classes, matcher, weight_dict, focal_alpha, losses, group_num=11)
+        super().__init__(num_classes, matcher, weight_dict, focal_alpha, applied_losses, group_num=group_num)
+    
+        self.loss_map.update(
+            {
+                'cbr_rpn':self.cbr_loss_rpn,
+                'cbr_2d':self.cbr_loss_2D,
+                'cbr_3d':self.cbr_loss_3D
+            }
+        )
+    def cbr_loss_rpn()->dict:
+        pass
+    
+    def cbr_loss_2D()->dict:
+        pass
+
+    def cbr_loss_3D()->dict:
+        pass
 
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
@@ -611,14 +643,21 @@ def build(cfg):
         aux_weight_dict.update({k + f'_enc': v for k, v in weight_dict.items()})
         weight_dict.update(aux_weight_dict)
 
-    losses = ['labels', 'boxes', 'cardinality', 'depths', 'dims', 'angles', 'center', 'depth_map']
+    applied_losses = ['labels',
+    'boxes',
+    'cardinality',
+    'depths',
+    'dims',
+    'angles',
+    'center',
+    'depth_map']
     
     criterion = SetCriterion(
         cfg['num_classes'],
         matcher=matcher,
         weight_dict=weight_dict,
         focal_alpha=cfg['focal_alpha'],
-        losses=losses)
+        losses=applied_losses)
 
     device = torch.device(cfg['device'])
     criterion.to(device)

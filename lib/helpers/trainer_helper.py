@@ -12,6 +12,7 @@ from lib.helpers.save_helper import save_checkpoint
 from utils import misc
 import wandb
 
+from lib.models.monodetr.monodetr import SetCriterion
 
 class Trainer(object):
     def __init__(self,
@@ -37,7 +38,7 @@ class Trainer(object):
         self.best_result = 0
         self.best_epoch = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.detr_loss = loss
+        self.detr_loss:SetCriterion = loss
         self.model_name = model_name
         self.output_dir = os.path.join(cfg['save_path'], model_name)
         self.tester = None
@@ -153,6 +154,7 @@ class Trainer(object):
             wandb.log(detr_losses_dict_log)
 
             flags = [True] * 5
+
             if batch_idx % 30 == 0:
                 print("----", batch_idx, "----")
                 print("%s: %.2f, " %("loss_detr", detr_losses_dict_log["loss_detr"]))
