@@ -122,6 +122,7 @@ trainer:
 tester:
   type: *dataset_type
   mode: single  # 'single' or 'all'; 'all' to evaluate all ckpts in the folder
+  profile: True # profile the inference time and flops or not
   checkpoint: 195  # the start ckpt epoch for 'all'
   threshold: 0.2  # confidence filter
   topk: 50

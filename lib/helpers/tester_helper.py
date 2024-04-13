@@ -1,13 +1,14 @@
 import os
 import tqdm
 import shutil
+import time
 
 import torch
 from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.decode_helper import extract_dets_from_outputs
 from lib.helpers.decode_helper import decode_detections
-import time
 
+from deepspeed.profiling.flops_profiler import get_model_profile
 
 class Tester(object):
     def __init__(self, cfg, model, dataloader, logger, train_cfg=None, model_name='monodetr'):
@@ -39,8 +40,11 @@ class Tester(object):
                             map_location=self.device,
                             logger=self.logger)
             self.model.to(self.device)
-            self.inference()
-            self.evaluate()
+            if self.cfg['profile']:
+                self.profile()
+            else:
+                self.inference()
+                self.evaluate()
 
         # test all checkpoints in the given dir
         elif self.cfg['mode'] == 'all' and self.train_cfg["save_all"]:
@@ -59,8 +63,33 @@ class Tester(object):
                                 map_location=self.device,
                                 logger=self.logger)
                 self.model.to(self.device)
-                self.inference()
-                self.evaluate()
+                if self.cfg['profile']:
+                    self.profile()
+                else:
+                    self.inference()
+                    self.evaluate()
+
+    def profile(self):
+        torch.set_grad_enabled(False)
+        self.model.eval()
+
+        inputs, calibs, targets, info = self.dataloader[0]
+
+        inputs = inputs.to(self.device)
+        calibs = calibs.to(self.device)
+        img_sizes = info['img_size'].to(self.device)
+
+        flops, macs, params = get_model_profile(model=self.model, # model
+            args=[inputs, calibs, targets, img_sizes], # list of positional arguments to the model.
+            kwargs={"dn_args": 0}, # dictionary of keyword arguments to the model.
+            print_profile=True, # prints the model graph with the measured profile attached to each module
+            detailed=True, # print the detailed profile
+            module_depth=-1, # depth into the nested modules, with -1 being the inner most modules
+            top_modules=1, # the number of top modules to print aggregated profile
+            warm_up=10, # the number of warm-ups before measuring the time of each module
+            as_string=True, # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
+            output_file=None, # path to the output file. If None, the profiler prints to stdout.
+            ignore_modules=None) # the list of modules to ignore in the profiling
 
     def inference(self):
         torch.set_grad_enabled(False)

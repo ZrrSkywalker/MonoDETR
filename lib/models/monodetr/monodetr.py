@@ -42,7 +42,7 @@ class MonoDETR(nn.Module):
             two_stage: two-stage MonoDETR
         """
         super().__init__()
- 
+
         self.num_queries = num_queries
         self.depthaware_transformer = depthaware_transformer
         self.depth_predictor = depth_predictor
@@ -98,14 +98,14 @@ class MonoDETR(nn.Module):
                     nn.Conv2d(backbone.num_channels[0], hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, hidden_dim),
                 )])
-        
+
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.with_box_refine = with_box_refine
         self.two_stage = two_stage
         self.num_classes = num_classes
 
-        if self.two_stage_dino:        
+        if self.two_stage_dino:
             _class_embed = nn.Linear(hidden_dim, num_classes)
             _bbox_embed = MLP(hidden_dim, hidden_dim, 6, 3)
             # init the two embed layers
@@ -113,7 +113,7 @@ class MonoDETR(nn.Module):
             bias_value = -math.log((1 - prior_prob) / prior_prob)
             _class_embed.bias.data = torch.ones(num_classes) * bias_value
             nn.init.constant_(_bbox_embed.layers[-1].weight.data, 0)
-            nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)   
+            nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)
             self.depthaware_transformer.enc_out_bbox_embed = copy.deepcopy(_bbox_embed)
             self.depthaware_transformer.enc_out_class_embed = copy.deepcopy(_class_embed)
 
@@ -129,7 +129,7 @@ class MonoDETR(nn.Module):
             # hack implementation for iterative bounding box refinement
             self.depthaware_transformer.decoder.bbox_embed = self.bbox_embed
             self.dim_embed_3d = _get_clones(self.dim_embed_3d, num_pred)
-            self.depthaware_transformer.decoder.dim_embed = self.dim_embed_3d  
+            self.depthaware_transformer.decoder.dim_embed = self.dim_embed_3d
             self.angle_embed = _get_clones(self.angle_embed, num_pred)
             self.depth_embed = _get_clones(self.depth_embed, num_pred)
         else:
@@ -153,6 +153,8 @@ class MonoDETR(nn.Module):
                - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
                - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
         """
+
+        # from ipdb import set_trace; set_trace()
 
         features, pos = self.backbone(images)
 
@@ -184,12 +186,12 @@ class MonoDETR(nn.Module):
             if self.training:
                 tgt_all_embed=tgt_embed = self.tgt_embed.weight           # nq, 256
                 refanchor = self.refpoint_embed.weight      # nq, 4
-                query_embeds = torch.cat((tgt_embed, refanchor), dim=1) 
-                
+                query_embeds = torch.cat((tgt_embed, refanchor), dim=1)
+
             else:
-                tgt_all_embed=tgt_embed = self.tgt_embed.weight[:self.num_queries]         
-                refanchor = self.refpoint_embed.weight[:self.num_queries]  
-                query_embeds = torch.cat((tgt_embed, refanchor), dim=1) 
+                tgt_all_embed=tgt_embed = self.tgt_embed.weight[:self.num_queries]
+                refanchor = self.refpoint_embed.weight[:self.num_queries]
+                query_embeds = torch.cat((tgt_embed, refanchor), dim=1)
         elif self.two_stage_dino:
             query_embeds = None
         else:
@@ -200,7 +202,7 @@ class MonoDETR(nn.Module):
                 query_embeds = self.query_embed.weight[:self.num_queries]
 
         pred_depth_map_logits, depth_pos_embed, weighted_depth, depth_pos_embed_ip = self.depth_predictor(srcs, masks[1], pos[1])
-        
+
         hs, init_reference, inter_references, inter_references_dim, enc_outputs_class, enc_outputs_coord_unact = self.depthaware_transformer(
             srcs, masks, pos, query_embeds, depth_pos_embed, depth_pos_embed_ip)#, attn_mask)
 
@@ -224,7 +226,7 @@ class MonoDETR(nn.Module):
                 assert reference.shape[-1] == 2
                 tmp[..., :2] += reference
 
-          
+
             # 3d center + 2d box
             outputs_coord = tmp.sigmoid()
             outputs_coords.append(outputs_coord)
@@ -267,7 +269,7 @@ class MonoDETR(nn.Module):
         outputs_3d_dim = torch.stack(outputs_3d_dims)
         outputs_depth = torch.stack(outputs_depths)
         outputs_angle = torch.stack(outputs_angles)
-  
+
         out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord[-1]}
         out['pred_3d_dim'] = outputs_3d_dim[-1]
         out['pred_depth'] = outputs_depth[-1]
@@ -288,7 +290,7 @@ class MonoDETR(nn.Module):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        return [{'pred_logits': a, 'pred_boxes': b, 
+        return [{'pred_logits': a, 'pred_boxes': b,
                  'pred_3d_dim': c, 'pred_angle': d, 'pred_depth': e}
                 for a, b, c, d, e in zip(outputs_class[:-1], outputs_coord[:-1],
                                          outputs_3d_dim[:-1], outputs_angle[:-1], outputs_depth[:-1])]
@@ -371,7 +373,7 @@ class SetCriterion(nn.Module):
         return losses
 
     def loss_3dcenter(self, outputs, targets, indices, num_boxes):
-        
+
         idx = self._get_src_permutation_idx(indices)
         src_3dcenter = outputs['pred_boxes'][:, :, 0: 2][idx]
         target_3dcenter = torch.cat([t['boxes_3d'][:, 0: 2][i] for t, (_, i) in zip(targets, indices)], dim=0)
@@ -382,7 +384,7 @@ class SetCriterion(nn.Module):
         return losses
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
-        
+
         assert 'pred_boxes' in outputs
         idx = self._get_src_permutation_idx(indices)
         src_2dboxes = outputs['pred_boxes'][:, :, 2: 6][idx]
@@ -402,20 +404,20 @@ class SetCriterion(nn.Module):
         losses['loss_giou'] = loss_giou.sum() / num_boxes
         return losses
 
-    def loss_depths(self, outputs, targets, indices, num_boxes):  
+    def loss_depths(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
-   
+
         src_depths = outputs['pred_depth'][idx]
         target_depths = torch.cat([t['depth'][i] for t, (_, i) in zip(targets, indices)], dim=0).squeeze()
 
-        depth_input, depth_log_variance = src_depths[:, 0], src_depths[:, 1] 
-        depth_loss = 1.4142 * torch.exp(-depth_log_variance) * torch.abs(depth_input - target_depths) + depth_log_variance  
+        depth_input, depth_log_variance = src_depths[:, 0], src_depths[:, 1]
+        depth_loss = 1.4142 * torch.exp(-depth_log_variance) * torch.abs(depth_input - target_depths) + depth_log_variance
         losses = {}
-        losses['loss_depth'] = depth_loss.sum() / num_boxes 
-        return losses  
-    
-    def loss_dims(self, outputs, targets, indices, num_boxes):  
+        losses['loss_depth'] = depth_loss.sum() / num_boxes
+        return losses
+
+    def loss_dims(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
         src_dims = outputs['pred_3d_dim'][idx]
@@ -431,7 +433,7 @@ class SetCriterion(nn.Module):
         losses['loss_dim'] = dim_loss.sum() / num_boxes
         return losses
 
-    def loss_angles(self, outputs, targets, indices, num_boxes):  
+    def loss_angles(self, outputs, targets, indices, num_boxes):
 
         idx = self._get_src_permutation_idx(indices)
         heading_input = outputs['pred_angle'][idx]
@@ -451,10 +453,10 @@ class SetCriterion(nn.Module):
         cls_onehot = torch.zeros(heading_target_cls.shape[0], 12).cuda().scatter_(dim=1, index=heading_target_cls.view(-1, 1), value=1)
         heading_input_res = torch.sum(heading_input_res * cls_onehot, 1)
         reg_loss = F.l1_loss(heading_input_res, heading_target_res, reduction='none')
-        
+
         angle_loss = cls_loss + reg_loss
         losses = {}
-        losses['loss_angle'] = angle_loss.sum() / num_boxes 
+        losses['loss_angle'] = angle_loss.sum() / num_boxes
         return losses
 
     def loss_depth_map(self, outputs, targets, indices, num_boxes):
@@ -464,7 +466,7 @@ class SetCriterion(nn.Module):
         gt_boxes2d = torch.cat([t['boxes'] for t in targets], dim=0) * torch.tensor([80, 24, 80, 24], device='cuda')
         gt_boxes2d = box_ops.box_cxcywh_to_xyxy(gt_boxes2d)
         gt_center_depth = torch.cat([t['depth'] for t in targets], dim=0).squeeze(dim=1)
-        
+
         losses = dict()
 
         losses["loss_depth_map"] = self.ddn_loss(
@@ -559,7 +561,7 @@ class ExtendedSetCriterion(SetCriterion):
             focal_alpha: alpha in Focal Loss
         """
         super().__init__(num_classes, matcher, weight_dict, focal_alpha, applied_losses, group_num=group_num)
-    
+
         self.loss_map.update(
             {
                 'cbr_rpn':self.cbr_loss_rpn,
@@ -569,7 +571,7 @@ class ExtendedSetCriterion(SetCriterion):
         )
     def cbr_loss_rpn()->dict:
         pass
-    
+
     def cbr_loss_2D()->dict:
         pass
 
@@ -626,7 +628,7 @@ def build(cfg):
     weight_dict['loss_depth'] = cfg['depth_loss_coef']
     weight_dict['loss_center'] = cfg['3dcenter_loss_coef']
     weight_dict['loss_depth_map'] = cfg['depth_map_loss_coef']
-    
+
     # dn loss
     if cfg['use_dn']:
         weight_dict['tgt_loss_ce']= cfg['cls_loss_coef']
@@ -651,7 +653,7 @@ def build(cfg):
     'angles',
     'center',
     'depth_map']
-    
+
     criterion = SetCriterion(
         cfg['num_classes'],
         matcher=matcher,
@@ -661,5 +663,5 @@ def build(cfg):
 
     device = torch.device(cfg['device'])
     criterion.to(device)
-    
+
     return model, criterion
