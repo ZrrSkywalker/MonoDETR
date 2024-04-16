@@ -73,7 +73,7 @@ class Tester(object):
         torch.set_grad_enabled(False)
         self.model.eval()
 
-        inputs, calibs, targets, info = self.dataloader[0]
+        inputs, calibs, targets, info = next(iter(self.dataloader))
 
         inputs = inputs.to(self.device)
         calibs = calibs.to(self.device)

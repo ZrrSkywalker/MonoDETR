@@ -9,6 +9,7 @@ from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 
 from utils.misc import inverse_sigmoid
 from .ops.modules import MSDeformAttn, MSDeformAttn_cross, MultiheadAttention
+from .rtdetr_hybrid_encoder import HybridEncoder
 
 
 class MLP(nn.Module):
@@ -59,7 +60,7 @@ def gen_sineembed_for_position(pos_tensor):
                 pos = pos_embed
             else:       # Concatenate embeds for l, r, t, b
                 pos = torch.cat((pos, pos_embed), dim=2)
-        pos = torch.cat((pos_y, pos_x, pos), dim=2) 
+        pos = torch.cat((pos_y, pos_x, pos), dim=2)
     else:
         raise ValueError("Unknown pos_tensor shape(-1):{}".format(pos_tensor.size(-1)))
     return pos
@@ -84,7 +85,8 @@ class DepthAwareTransformer(nn.Module):
             group_num=11,
             use_dab=False,
             two_stage_dino=False,
-            depth_guidance=True):
+            depth_guidance=True,
+            rtdetr_visual_encoder=False):
 
         super().__init__()
 
@@ -96,10 +98,24 @@ class DepthAwareTransformer(nn.Module):
         self.two_stage_dino = two_stage_dino
         self.group_num = group_num
         self.depth_guidance = depth_guidance
+        self.rtdetr_visual_encoder = rtdetr_visual_encoder
 
-        encoder_layer = VisualEncoderLayer(
-            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points)
-        self.encoder = VisualEncoder(encoder_layer, num_encoder_layers)
+        # Visual Encoder
+        if self.rtdetr_visual_encoder:
+            self.encoder = HybridEncoder(
+                in_channels=[d_model] * num_feature_levels,
+                feat_strides=None,
+                hidden_dim=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                enc_act='gelu',
+                use_encoder_idx=[num_feature_levels-1],
+                num_encoder_layers=num_encoder_layers,
+                act='silu')
+        else:
+            encoder_layer = VisualEncoderLayer(
+                d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points)
+            self.encoder = VisualEncoder(encoder_layer, num_encoder_layers)
 
         decoder_layer = DepthAwareDecoderLayer(
             d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, dec_n_points, group_num=group_num, depth_guidance = self.depth_guidance)
@@ -114,7 +130,7 @@ class DepthAwareTransformer(nn.Module):
             self.pos_trans_norm = nn.LayerNorm(d_model * 2)
         elif two_stage_dino:
             self.enc_output = nn.Linear(d_model, d_model)
-            self.enc_output_norm = nn.LayerNorm(d_model)      
+            self.enc_output_norm = nn.LayerNorm(d_model)
             self.tgt_embed = nn.Embedding(self.two_stage_num_proposals*group_num, d_model)
             nn.init.normal_(self.tgt_embed.weight.data)
             self.two_stage_wh_embedding = None
@@ -169,7 +185,7 @@ class DepthAwareTransformer(nn.Module):
 
             scale = torch.cat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(N_, 1, 1, 2)
             grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
-            
+
             lr = torch.ones_like(grid) * 0.05 * (2.0 ** lvl)
             tb = torch.ones_like(grid) * 0.05 * (2.0 ** lvl)
             wh = torch.cat((lr, tb), -1)
@@ -220,15 +236,19 @@ class DepthAwareTransformer(nn.Module):
             src_flatten.append(src)
             mask_flatten.append(mask)
 
-        src_flatten = torch.cat(src_flatten, 1)
-        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
-        mask_flatten = torch.cat(mask_flatten, 1)
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=srcs[0].device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1]))
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
+        mask_flatten = torch.cat(mask_flatten, 1)
 
-        # encoder
-        memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten)
+        if self.rtdetr_visual_encoder:
+            memory = self.encoder(src_flatten, spatial_shapes, lvl_pos_embed_flatten)
+            memory = torch.cat([m.flatten(2).transpose(1, 2) for m in memory], 1)
+        else:
+            src_flatten = torch.cat(src_flatten, 1)
+            lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
+            memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten)
+
         #enc_intermediate_output, enc_intermediate_refpoints = None
         # prepare input for decoder
         bs, _, c = memory.shape
@@ -249,13 +269,13 @@ class DepthAwareTransformer(nn.Module):
             topk_coords_unact = topk_coords_unact.detach()
             reference_points = topk_coords_unact.sigmoid()
             init_reference_out = reference_points
-            
+
             topk_coords_unact_input = torch.cat((topk_coords_unact[..., 0: 2], topk_coords_unact[..., 2: : 2] + topk_coords_unact[..., 3: : 2]), dim=-1)
 
             pos_trans_out = self.pos_trans_norm(self.pos_trans(self.get_proposal_pos_embed(topk_coords_unact_input)))
             query_embed, tgt = torch.split(pos_trans_out, c, dim=2)
         elif self.use_dab:
-            reference_points = query_embed[..., self.d_model:].sigmoid() 
+            reference_points = query_embed[..., self.d_model:].sigmoid()
             tgt = query_embed[..., :self.d_model]
             tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
             ##for dn
@@ -416,7 +436,7 @@ class DepthAwareDecoderLayer(nn.Module):
         self.norm3 = nn.LayerNorm(d_model)
 
         self.group_num = group_num
-        
+
         # Decoder Self-Attention
         self.sa_qcontent_proj = nn.Linear(d_model, d_model)
         self.sa_qpos_proj = nn.Linear(d_model, d_model)
@@ -425,7 +445,6 @@ class DepthAwareDecoderLayer(nn.Module):
         self.sa_v_proj = nn.Linear(d_model, d_model)
         self.nhead = n_heads
         self.depth_guidance = depth_guidance
-        
 
     @staticmethod
     def with_pos_embed(tensor, pos):
@@ -446,7 +465,7 @@ class DepthAwareDecoderLayer(nn.Module):
                 level_start_index,
                 src_padding_mask,
                 depth_pos_embed,
-                mask_depth, 
+                mask_depth,
                 bs,
                 query_sine_embed=None,
                 is_first=None,
@@ -463,15 +482,15 @@ class DepthAwareDecoderLayer(nn.Module):
                                         depth_pos_embed,
                                         depth_pos_embed,
                                         key_padding_mask=mask_depth)[0].transpose(0, 1)
-        
+
             tgt = tgt + self.dropout_depth(tgt2)
             tgt = self.norm_depth(tgt)
 
-            # self attention        
+            # self attention
             # import ipdb
             # ipdb.set_trace()
             q = k = self.with_pos_embed(tgt, query_pos)
-            
+
             q_content = self.sa_qcontent_proj(q)
             q_pos = self.sa_qpos_proj(q)
             k_content = self.sa_kcontent_proj(k)
@@ -479,12 +498,12 @@ class DepthAwareDecoderLayer(nn.Module):
             v = self.sa_v_proj(tgt)
             q = q_content + q_pos
             k = k_content + k_pos
-            
+
             q = q.transpose(0, 1)
             k = k.transpose(0, 1)
             v = tgt.transpose(0, 1)
             num_queries = q.shape[0]
-        
+
             if self.training:
                 num_noise = num_queries-self.group_num * 50
                 num_queries = self.group_num * 50
@@ -500,17 +519,16 @@ class DepthAwareDecoderLayer(nn.Module):
                 q = torch.cat([q_noise,q], dim=0)
                 k = torch.cat([k_noise,k], dim=0)
                 v = torch.cat([v_noise,v], dim=0)
-            
+
             tgt2 = self.self_attn(q, k, v)[0]
             if self.training:
                 tgt2 = torch.cat(tgt2.split(bs, dim=1), dim=0).transpose(0, 1)
-                
+
             else:
                 tgt2 = tgt2.transpose(0, 1)
             tgt = tgt + self.dropout2(tgt2)
             tgt = self.norm2(tgt)
-      
-        
+
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, query_pos),
                                reference_points,
                                src, src_spatial_shapes, level_start_index, src_padding_mask)
@@ -567,34 +585,34 @@ class DepthAwareDecoder(nn.Module):
         elif self.two_stgae_dino:
             reference_points = reference_points.sigmoid()
 
-        
+
         for lid, layer in enumerate(self.layers):
-            
+
             if reference_points.shape[-1] == 6:
-                
+
                 reference_points_input = reference_points[:, :, None] * torch.cat([src_valid_ratios, src_valid_ratios, src_valid_ratios], -1)[:, None]
             else:
                 assert reference_points.shape[-1] == 2
-                
+
                 reference_points_input = reference_points[:, :, None] * src_valid_ratios[:, None]
             if self.two_stgae_dino:
-                
+
                 query_sine_embed = gen_sineembed_for_position(reference_points_input[:, :, 0, :])
                 raw_query_pos = self.ref_point_head(query_sine_embed) # nq, bs, 256
-                
+
                 pos_scale = self.query_scale(output) if lid != 0 else 1
                 query_pos = pos_scale * raw_query_pos
             ###conditional
             #ipdb.set_trace()
             query_pos_un=None
             if self.use_dab:
-                
-                query_sine_embed = gen_sineembed_for_position(reference_points_input[:, :, 0, :]) # bs, nq, 256*2 
+
+                query_sine_embed = gen_sineembed_for_position(reference_points_input[:, :, 0, :]) # bs, nq, 256*2
                 raw_query_pos = self.ref_point_head(query_sine_embed) # bs, nq, 256
                 pos_scale = self.query_scale(output) if lid != 0 else 1
                 #pos_scale  = 1
                 query_pos = pos_scale * raw_query_pos
-                
+
             output = layer(output,
                            query_pos,
                            reference_points_input,
@@ -666,4 +684,5 @@ def build_depthaware_transformer(cfg):
         two_stage_num_proposals=cfg['num_queries'],
         use_dab= cfg['use_dab'],
         two_stage_dino = cfg['two_stage_dino'],
-        depth_guidance = cfg['depth_guidance'])
+        depth_guidance = cfg['depth_guidance'],
+        rtdetr_visual_encoder=cfg['rtdetr_visual_encoder'])

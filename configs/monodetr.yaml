@@ -48,6 +48,7 @@ model:
 
   # Transformer
   with_box_refine: True
+  rtdetr_visual_encoder: False
   two_stage: False
   use_dab: False
   use_dn: False
@@ -122,7 +123,7 @@ trainer:
 tester:
   type: *dataset_type
   mode: single  # 'single' or 'all'; 'all' to evaluate all ckpts in the folder
-  profile: True # profile the inference time and flops or not
+  profile: False # profile the inference time and flops or not
   checkpoint: 195  # the start ckpt epoch for 'all'
   threshold: 0.2  # confidence filter
   topk: 50

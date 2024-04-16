@@ -127,7 +127,7 @@ class Joiner(nn.Sequential):
 
 
 def build_backbone(cfg):
-    
+
     position_embedding = build_position_encoding(cfg)
     return_interm_layers = cfg['masks'] or cfg['num_feature_levels'] > 1
     backbone = Backbone(cfg['backbone'], cfg['train_backbone'], return_interm_layers, cfg['dilation'])

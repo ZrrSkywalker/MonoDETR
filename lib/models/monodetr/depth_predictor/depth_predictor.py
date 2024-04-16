@@ -54,8 +54,10 @@ class DepthPredictor(nn.Module):
         self.depth_pos_embed = nn.Embedding(int(self.depth_max) + 1, 256)
 
     def forward(self, feature, mask, pos):
-       
+
         assert len(feature) == 4
+
+        # import ipdb
 
         # foreground depth map
         #ipdb.set_trace()
@@ -70,7 +72,7 @@ class DepthPredictor(nn.Module):
         src = (src_8 + src_16 + src_32) / 3
 
         src = self.depth_head(src)
-        #ipdb.set_trace()
+        # ipdb.set_trace()
         depth_logits = self.depth_classifier(src)
 
         depth_probs = F.softmax(depth_logits, dim=1)
