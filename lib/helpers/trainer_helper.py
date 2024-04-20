@@ -10,6 +10,7 @@ from lib.helpers.save_helper import load_checkpoint
 from lib.helpers.save_helper import save_checkpoint
 
 from utils import misc
+import wandb
 
 
 class Trainer(object):
@@ -38,7 +39,7 @@ class Trainer(object):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.detr_loss = loss
         self.model_name = model_name
-        self.output_dir = os.path.join('./' + cfg['save_path'], model_name)
+        self.output_dir = os.path.join(cfg['save_path'], model_name)
         self.tester = None
 
         # loading pretrain/resume model
@@ -64,7 +65,6 @@ class Trainer(object):
         
     def train(self):
         start_epoch = self.epoch
-
         progress_bar = tqdm.tqdm(range(start_epoch, self.cfg['max_epoch']), dynamic_ncols=True, leave=True, desc='epochs')
         best_result = self.best_result
         best_epoch = self.best_epoch
@@ -150,6 +150,7 @@ class Trainer(object):
                     detr_losses_dict_log[k] = (detr_losses_dict[k] * weight_dict[k]).item()
                     detr_losses_log += detr_losses_dict_log[k]
             detr_losses_dict_log["loss_detr"] = detr_losses_log
+            wandb.log(detr_losses_dict_log)
 
             flags = [True] * 5
             if batch_idx % 30 == 0:

@@ -1,3 +1,4 @@
+
 # built files
 lib/models/monodetr/ops/
 
@@ -10,5 +11,7 @@ logs/
 
 # outputs
 outputs/
+output/
+output*/
 
 

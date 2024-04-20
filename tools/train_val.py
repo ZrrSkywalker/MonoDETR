@@ -4,6 +4,7 @@ warnings.filterwarnings("ignore")
 import os
 import sys
 import torch
+import wandb
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -29,6 +30,9 @@ parser.add_argument('-e', '--evaluate_only', action='store_true', default=False,
 args = parser.parse_args()
 
 
+
+
+
 def main():
     assert (os.path.exists(args.config))
     cfg = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
@@ -38,9 +42,34 @@ def main():
     output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name)
     os.makedirs(output_path, exist_ok=True)
 
-    log_file = os.path.join(output_path, 'train.log.%s' % datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+
+    log_file = os.path.join(output_path, 'train.log.%s' % date_time)
     logger = create_logger(log_file)
 
+    
+
+    # ✨ W&B: setup
+    wandb_cfg = {
+        "epochs": cfg['trainer']['max_epoch'],
+        "learning_rate": cfg['optimizer']['lr'],
+        "batch_size": cfg['dataset']['batch_size'],
+        "seed": cfg.get('random_seed', 444),
+        "model": model_name,
+        "dataset": cfg['dataset']['root_dir'],
+        "optimizer": cfg['optimizer']['type'],
+        "scheduler": cfg['lr_scheduler']['type'],
+        "depth_guidance": cfg['model']['depth_guidance'],
+    }
+    wandb.init(
+        project="MonoDETR",
+        entity="adlcv",
+        config=wandb_cfg,
+        job_type="train",
+        name="train_" + date_time,
+        dir="./outputs",
+    )
+    
     # build dataloader
     train_loader, test_loader = build_dataloader(cfg['dataset'])
 
