@@ -219,6 +219,10 @@ class DepthAwareTransformer(nn.Module):
         return valid_ratio
 
     def forward(self, srcs, masks, pos_embeds, query_embed=None, depth_pos_embed=None, depth_pos_embed_ip=None, attn_mask=None):
+        """
+        srcs are the features from the backbone
+        masks are the corresponding valid regions
+        """
         if not self.two_stage_dino:
             assert self.two_stage or query_embed is not None
 
@@ -228,7 +232,7 @@ class DepthAwareTransformer(nn.Module):
         lvl_pos_embed_flatten = []
         spatial_shapes = []
         for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
-            bs, c, h, w = src.shape
+            bs, c, h, w = src.shape # batch_size, channels, height, width
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
             src = src.flatten(2).transpose(1, 2)
@@ -671,7 +675,7 @@ def _get_activation_fn(activation):
     raise RuntimeError(F"activation should be relu/gelu, not {activation}.")
 
 
-def build_depthaware_transformer(cfg):
+def build_depthaware_transformer(cfg)->DepthAwareTransformer:
     return DepthAwareTransformer(
         d_model=cfg['hidden_dim'],
         dropout=cfg['dropout'],

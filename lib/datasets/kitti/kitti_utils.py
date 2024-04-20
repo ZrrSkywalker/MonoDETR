@@ -1,13 +1,11 @@
 import numpy as np
 import cv2
 
+from typing import List
+
 ################  Object3D  ##################
 
-def get_objects_from_label(label_file):
-    with open(label_file, 'r') as f:
-        lines = f.readlines()
-    objects = [Object3d(line) for line in lines]
-    return objects
+
 
 
 class Object3d(object):
@@ -62,8 +60,8 @@ class Object3d(object):
         z_corners = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
 
         R = np.array([[np.cos(self.ry), 0, np.sin(self.ry)],
-                      [0, 1, 0],
-                      [-np.sin(self.ry), 0, np.cos(self.ry)]])
+                        [0, 1, 0],
+                        [-np.sin(self.ry), 0, np.cos(self.ry)]])
         corners3d = np.vstack([x_corners, y_corners, z_corners])  # (3, 8)
         corners3d = np.dot(R, corners3d).T
         corners3d = corners3d + self.pos
@@ -111,7 +109,11 @@ class Object3d(object):
                        self.ry)
         return kitti_str
 
-
+def get_objects_from_label(label_file)->List[Object3d]:
+    with open(label_file, 'r') as f:
+        lines = f.readlines()
+    objects = [Object3d(line) for line in lines]
+    return objects
 
 ###################  calibration  ###################
 
@@ -202,7 +204,7 @@ class Calibration(object):
         :param u: (N)
         :param v: (N)
         :param depth_rect: (N)
-        :return:
+        :return: 
         """
         x = ((u - self.cu) * depth_rect) / self.fu + self.tx
         y = ((v - self.cv) * depth_rect) / self.fv + self.ty
@@ -271,7 +273,7 @@ class Calibration(object):
         """
         Get rotation_y by alpha + theta - 180
         alpha : Observation angle of object, ranging [-pi..pi]
-        x : Object center x to the camera center (x-W/2), in pixels
+        u : Object center u to the camera center (u-W/2), in pixels
         rotation_y : Rotation ry around Y-axis in camera coordinates [-pi..pi]
         """
         ry = alpha + np.arctan2(u - self.cu, self.fu)

@@ -87,10 +87,10 @@ class DepthPredictor(nn.Module):
         depth_embed = self.depth_encoder(src, mask, pos)
         depth_embed = depth_embed.permute(1, 2, 0).reshape(B, C, H, W)
         #ipdb.set_trace()
-        depth_pos_embed_ip = self.interpolate_depth_embed(weighted_depth)
-        depth_embed = depth_embed + depth_pos_embed_ip
+        depth_pos_embed_interpolated = self.interpolate_depth_embed(weighted_depth)
+        depth_embed = depth_embed + depth_pos_embed_interpolated
 
-        return depth_logits, depth_embed, weighted_depth, depth_pos_embed_ip
+        return depth_logits, depth_embed, weighted_depth, depth_pos_embed_interpolated
 
     def interpolate_depth_embed(self, depth):
         depth = depth.clamp(min=0, max=self.depth_max)

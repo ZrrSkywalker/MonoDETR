@@ -16,4 +16,5 @@ output*/
 
 # wandb
 wandb/
-
+# data
+data/
