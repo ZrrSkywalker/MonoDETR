@@ -12,6 +12,7 @@ from lib.helpers.save_helper import save_checkpoint
 from utils import misc
 import wandb
 
+from lib.models.monodetr.monodetr import SetCriterion, MonoDETR
 
 class Trainer(object):
     def __init__(self,
@@ -26,7 +27,7 @@ class Trainer(object):
                  loss,
                  model_name):
         self.cfg = cfg
-        self.model = model
+        self.model:MonoDETR = model
         self.optimizer = optimizer
         self.train_loader = train_loader
         self.test_loader = test_loader
@@ -37,7 +38,7 @@ class Trainer(object):
         self.best_result = 0
         self.best_epoch = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.detr_loss = loss
+        self.detr_loss:SetCriterion = loss
         self.model_name = model_name
         self.output_dir = os.path.join(cfg['save_path'], model_name)
         self.tester = None
@@ -119,7 +120,8 @@ class Trainer(object):
         print(">>>>>>> Epoch:", str(epoch) + ":")
 
         progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch+1 == self.cfg['max_epoch']), desc='iters')
-        for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
+        
+        for batch_idx, (inputs, calibs, targets, targets_info) in enumerate(self.train_loader):
             inputs = inputs.to(self.device)
             calibs = calibs.to(self.device)
             for key in targets.keys():
@@ -136,7 +138,7 @@ class Trainer(object):
             outputs = self.model(inputs, calibs, targets, img_sizes, dn_args=dn_args)
             mask_dict=None
             #ipdb.set_trace()
-            detr_losses_dict = self.detr_loss(outputs, targets, mask_dict)
+            detr_losses_dict = self.detr_loss(outputs, targets, mask_dict, targets_info=targets_info)
 
             weight_dict = self.detr_loss.weight_dict
             detr_losses_dict_weighted = [detr_losses_dict[k] * weight_dict[k] for k in detr_losses_dict.keys() if k in weight_dict]
@@ -153,13 +155,15 @@ class Trainer(object):
             wandb.log(detr_losses_dict_log)
 
             flags = [True] * 5
+
             if batch_idx % 30 == 0:
                 print("----", batch_idx, "----")
                 print("%s: %.2f, " %("loss_detr", detr_losses_dict_log["loss_detr"]))
                 for key, val in detr_losses_dict_log.items():
                     if key == "loss_detr":
                         continue
-                    if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
+                    # if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
+                    if key[-1] in ["0", "1", "2", "3", "4", "5"]: # print for aux losses
                         if flags[int(key[-1])]:
                             print("")
                             flags[int(key[-1])] = False
@@ -173,16 +177,20 @@ class Trainer(object):
             progress_bar.update()
         progress_bar.close()
 
-    def prepare_targets(self, targets, batch_size):
+    def prepare_targets(self, targets:dict, batch_size):
+        """
+        Changes the structure of the targets dictionary to a list of dictionaries.
+        one dictionary per sample in the batch.
+        """
         targets_list = []
-        mask = targets['mask_2d']
+        mask = targets['mask_2d'] # indices of valid targets
 
-        key_list = ['labels', 'boxes', 'calibs', 'depth', 'size_3d', 'heading_bin', 'heading_res', 'boxes_3d']
+        key_list = ['labels', 'boxes', 'calibs', 'depth', 'size_3d', 'heading_bin', 'heading_res', 'boxes_3d', 'mask_2d',
+                    'img_size_repeat','ry']
         for bz in range(batch_size):
             target_dict = {}
             for key, val in targets.items():
                 if key in key_list:
-                    target_dict[key] = val[bz][mask[bz]]
+                    target_dict[key] = val[bz][mask[bz]] # only take valid targets into account
             targets_list.append(target_dict)
         return targets_list
-

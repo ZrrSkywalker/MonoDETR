@@ -84,6 +84,3 @@ if __name__ == '__main__':
 
     for channels in [30, 32, 64, 71, 1025, 2048, 3096]:
         check_gradient_numerical(channels, True, True, True)
-
-
-

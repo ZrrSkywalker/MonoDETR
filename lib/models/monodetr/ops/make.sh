@@ -7,4 +7,6 @@
 # Modified from https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/tree/pytorch_1.0.0
 # ------------------------------------------------------------------------------------------------
 
+# make sure to use the correct python for example
+# /home/iony/miniconda3/envs/adlcv/bin/python setup.py build install
 python setup.py build install

@@ -22,56 +22,56 @@ The official results in the paper:
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
-        <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>   
+        <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>
     </tr>
     <tr>
-        <td div align="center">Easy</td> 
-        <td div align="center">Mod.</td> 
-        <td div align="center">Hard</td> 
+        <td div align="center">Easy</td>
+        <td div align="center">Mod.</td>
+        <td div align="center">Hard</td>
     </tr>
     <tr>
         <td rowspan="4",div align="center">MonoDETR</td>
-        <td div align="center">28.84%</td> 
-        <td div align="center">20.61%</td> 
-        <td div align="center">16.38%</td> 
-    </tr>  
+        <td div align="center">28.84%</td>
+        <td div align="center">20.61%</td>
+        <td div align="center">16.38%</td>
+    </tr>
 </table>
 
 New and better results in this repo:
 <table>
     <tr>
         <td rowspan="2",div align="center">Models</td>
-        <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>   
+        <td colspan="3",div align="center">Val, AP<sub>3D|R40</sub></td>
         <td rowspan="2",div align="center">Logs</td>
         <td rowspan="2",div align="center">Ckpts</td>
     </tr>
     <tr>
-        <td div align="center">Easy</td> 
-        <td div align="center">Mod.</td> 
-        <td div align="center">Hard</td> 
+        <td div align="center">Easy</td>
+        <td div align="center">Mod.</td>
+        <td div align="center">Hard</td>
     </tr>
     <tr>
         <td rowspan="4",div align="center">MonoDETR</td>
-        <td div align="center">28.79%</td> 
-        <td div align="center">20.83%</td> 
-        <td div align="center">17.47%</td> 
+        <td div align="center">28.79%</td>
+        <td div align="center">20.83%</td>
+        <td div align="center">17.47%</td>
         <td div align="center"><a href="https://drive.google.com/file/d/1U2l2nYMOc6pTgASuck1PM9MOCyfEJwwE/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/file/d/1d8fbAt-CQF-IN8UEHuw3NimmfONhH6iA/view?usp=sharing">ckpt</a></td>
-    </tr>  
+    </tr>
   <tr>
-        <td div align="center">29.36%</td> 
-        <td div align="center">20.64%</td> 
-        <td div align="center">17.30%</td> 
+        <td div align="center">29.36%</td>
+        <td div align="center">20.64%</td>
+        <td div align="center">17.30%</td>
         <td div align="center"><a href="https://drive.google.com/file/d/1HbezCRjc8-sut80yPwUdIK8bilV3lyrx/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/file/d/1kT17M-IaquLiOG8QNw9n3qCtNsnqk-21/view?usp=sharing">ckpt</a></td>
-    </tr>  
+    </tr>
   <tr>
-        <td div align="center">27.58%</td> 
-        <td div align="center">20.14%</td> 
-        <td div align="center">16.98%</td> 
+        <td div align="center">27.58%</td>
+        <td div align="center">20.14%</td>
+        <td div align="center">16.98%</td>
         <td div align="center"><a href="https://drive.google.com/file/d/1WqEkIFBVR9iVdGwn4vQ68U0lHXrZp6tQ/view?usp=sharing">log</a></td>
         <td div align="center"><a href="https://drive.google.com/file/d/1EbUpPmRT7AkL-BHOvyM67Wz1GDY_MuJZ/view?usp=sharing">ckpt</a></td>
-    </tr>  
+    </tr>
 </table>
 
 
@@ -84,28 +84,28 @@ New and better results in this repo:
     conda create -n monodetr python=3.8
     conda activate monodetr
     ```
-    
+
 2. Install pytorch and torchvision matching your CUDA version:
     ```bash
     conda install pytorch torchvision cudatoolkit
     # We adopt torch 1.9.0+cu111
     ```
-    
+
 3. Install requirements and compile the deformable attention:
     ```
     pip install -r requirements.txt
 
     cd lib/models/monodetr/ops/
     bash make.sh
-    
+
     cd ../../../..
     ```
-    
+
 4. Make dictionary for saving training losses:
     ```
     mkdir logs
     ```
- 
+
 5. Download [KITTI](http://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d) datasets and prepare the directory structure as:
     ```
     │MonoDETR/
@@ -117,18 +117,20 @@ New and better results in this repo:
     ├──...
     ```
     You can also change the data path at "dataset/root_dir" in `configs/monodetr.yaml`.
-    
+
 ## Get Started
 
 ### Train
 You can modify the settings of models and training in `configs/monodetr.yaml` and indicate the GPU in `train.sh`:
 
     bash train.sh configs/monodetr.yaml > logs/monodetr.log
-   
+
 ### Test
 The best checkpoint will be evaluated as default. You can change it at "tester/checkpoint" in `configs/monodetr.yaml`:
 
     bash test.sh configs/monodetr.yaml
+
+To enable the profiler (deepspeed) set `profile: True` in the tester section of the config file.
 
 
 ## Acknowlegment

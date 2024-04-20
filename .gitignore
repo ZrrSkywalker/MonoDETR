@@ -3,8 +3,8 @@
 lib/models/monodetr/ops/
 
 # compiled python
-**/*.pyc
-**/*.so
+*.pyc
+*.so
 
 # logs
 logs/
@@ -14,4 +14,7 @@ outputs/
 output/
 output*/
 
-
+# wandb
+wandb/
+# data
+data/

@@ -27,7 +27,7 @@ class KITTI_Dataset(data.Dataset):
         self.root_dir = cfg.get('root_dir')
         self.split = split
         self.num_classes = 3
-        self.max_objs = 50
+        self.max_objs = 25
         self.class_name = ['Pedestrian', 'Car', 'Cyclist']
         self.cls2id = {'Pedestrian': 0, 'Car': 1, 'Cyclist': 2}
         self.resolution = np.array([1280, 384])  # W * H
@@ -207,6 +207,8 @@ class KITTI_Dataset(data.Dataset):
         src_size_3d = np.zeros((self.max_objs, 3), dtype=np.float32)
         boxes = np.zeros((self.max_objs, 4), dtype=np.float32)
         boxes_3d = np.zeros((self.max_objs, 6), dtype=np.float32)
+        # extra encoding of ry
+        ry = np.zeros((self.max_objs, 1), dtype=np.float32)
 
         object_num = len(objects) if len(objects) < self.max_objs else self.max_objs
 
@@ -301,6 +303,8 @@ class KITTI_Dataset(data.Dataset):
             if heading_angle < -np.pi: heading_angle += 2 * np.pi
             heading_bin[i], heading_res[i] = angle2class(heading_angle)
 
+            ry[i] = objects[i].ry
+
             # encoding size_3d
             src_size_3d[i] = np.array([objects[i].h, objects[i].w, objects[i].l], dtype=np.float32)
             mean_size = self.cls_mean_size[self.cls2id[objects[i].cls_type]]
@@ -314,23 +318,28 @@ class KITTI_Dataset(data.Dataset):
         # collect return data
         inputs = img
         targets = {
-                   'calibs': calibs,
-                   'indices': indices,
-                   'img_size': img_size,
-                   'labels': labels,
-                   'boxes': boxes,
-                   'boxes_3d': boxes_3d,
-                   'depth': depth,
-                   'size_2d': size_2d,
-                   'size_3d': size_3d,
-                   'src_size_3d': src_size_3d,
-                   'heading_bin': heading_bin,
-                   'heading_res': heading_res,
-                   'mask_2d': mask_2d}
+                    'calibs': calibs,
+                    'indices': indices,
+                    'img_size': img_size,
+                    'img_size_repeat': np.vstack([img_size for i in range(self.max_objs)]),
+                    'labels': labels,
+                    'boxes': boxes,
+                    'boxes_3d': boxes_3d,
+                    'depth': depth,
+                    'size_2d': size_2d,
+                    'size_3d': size_3d,
+                    'src_size_3d': src_size_3d,
+                    'heading_bin': heading_bin,
+                    'heading_res': heading_res,
+                    'mask_2d': mask_2d,
+                    'ry': ry,
+                #    'objects': objects
+                   }
 
         info = {'img_id': index,
                 'img_size': img_size,
                 'bbox_downsample_ratio': img_size / features_size}
+        
         return inputs, calib.P2, targets, info
 
 
