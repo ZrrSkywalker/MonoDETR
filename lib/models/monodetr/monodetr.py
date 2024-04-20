@@ -154,7 +154,6 @@ class MonoDETR(nn.Module):
                - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
         """
 
-        # from ipdb import set_trace; set_trace()
 
         features, pos = self.backbone(images)
 
