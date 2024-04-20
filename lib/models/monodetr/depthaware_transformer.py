@@ -83,7 +83,8 @@ class DepthAwareTransformer(nn.Module):
             two_stage_num_proposals=50,
             group_num=11,
             use_dab=False,
-            two_stage_dino=False):
+            two_stage_dino=False,
+            depth_guidance=True):
 
         super().__init__()
 
@@ -94,13 +95,14 @@ class DepthAwareTransformer(nn.Module):
         self.use_dab = use_dab
         self.two_stage_dino = two_stage_dino
         self.group_num = group_num
+        self.depth_guidance = depth_guidance
 
         encoder_layer = VisualEncoderLayer(
             d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points)
         self.encoder = VisualEncoder(encoder_layer, num_encoder_layers)
 
         decoder_layer = DepthAwareDecoderLayer(
-            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, dec_n_points, group_num=group_num)
+            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, dec_n_points, group_num=group_num, depth_guidance = self.depth_guidance)
         self.decoder = DepthAwareDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec, d_model, use_dab=use_dab, two_stage_dino=two_stage_dino)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
@@ -387,7 +389,7 @@ class VisualEncoder(nn.Module):
 class DepthAwareDecoderLayer(nn.Module):
     def __init__(self, d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4, group_num=1):
+                 n_levels=4, n_heads=8, n_points=4, group_num=1, depth_guidance=True):
         super().__init__()
 
         # cross attention
@@ -422,6 +424,7 @@ class DepthAwareDecoderLayer(nn.Module):
         self.sa_kpos_proj = nn.Linear(d_model, d_model)
         self.sa_v_proj = nn.Linear(d_model, d_model)
         self.nhead = n_heads
+        self.depth_guidance = depth_guidance
         
 
     @staticmethod
@@ -452,55 +455,60 @@ class DepthAwareDecoderLayer(nn.Module):
                 self_attn_mask=None,
                 query_pos_un=None):
 
-        # depth cross attention
-        tgt2 = self.cross_attn_depth(tgt.transpose(0, 1),
-                                     depth_pos_embed,
-                                     depth_pos_embed,
-                                     key_padding_mask=mask_depth)[0].transpose(0, 1)
-       
-        tgt = tgt + self.dropout_depth(tgt2)
-        tgt = self.norm_depth(tgt)
+        #print("Before Cross Attention")
+        if self.depth_guidance:
+            #print("inside Cross Attention")
+            # depth cross attention
+            tgt2 = self.cross_attn_depth(tgt.transpose(0, 1),
+                                        depth_pos_embed,
+                                        depth_pos_embed,
+                                        key_padding_mask=mask_depth)[0].transpose(0, 1)
+        
+            tgt = tgt + self.dropout_depth(tgt2)
+            tgt = self.norm_depth(tgt)
 
-        # self attention
-        q = k = self.with_pos_embed(tgt, query_pos)
-        
-        q_content = self.sa_qcontent_proj(q)
-        q_pos = self.sa_qpos_proj(q)
-        k_content = self.sa_kcontent_proj(k)
-        k_pos = self.sa_kpos_proj(k)
-        v = self.sa_v_proj(tgt)
-        q = q_content + q_pos
-        k = k_content + k_pos
-        
-        q = q.transpose(0, 1)
-        k = k.transpose(0, 1)
-        v = tgt.transpose(0, 1)
-        num_queries = q.shape[0]
-       
-        if self.training:
-            num_noise = num_queries-self.group_num * 50
-            num_queries = self.group_num * 50
-            q_noise = q[:num_noise].repeat(1,self.group_num, 1)
-            k_noise = k[:num_noise].repeat(1,self.group_num, 1)
-            v_noise = v[:num_noise].repeat(1,self.group_num, 1)
-            q = q[num_noise:]
-            k = k[num_noise:]
-            v = v[num_noise:]
-            q = torch.cat(q.split(num_queries // self.group_num, dim=0), dim=1)
-            k = torch.cat(k.split(num_queries // self.group_num, dim=0), dim=1)
-            v = torch.cat(v.split(num_queries // self.group_num, dim=0), dim=1)
-            q = torch.cat([q_noise,q], dim=0)
-            k = torch.cat([k_noise,k], dim=0)
-            v = torch.cat([v_noise,v], dim=0)
-        
-        tgt2 = self.self_attn(q, k, v)[0]
-        if self.training:
-            tgt2 = torch.cat(tgt2.split(bs, dim=1), dim=0).transpose(0, 1)
+            # self attention        
+            # import ipdb
+            # ipdb.set_trace()
+            q = k = self.with_pos_embed(tgt, query_pos)
             
-        else:
-            tgt2 = tgt2.transpose(0, 1)
-        tgt = tgt + self.dropout2(tgt2)
-        tgt = self.norm2(tgt)
+            q_content = self.sa_qcontent_proj(q)
+            q_pos = self.sa_qpos_proj(q)
+            k_content = self.sa_kcontent_proj(k)
+            k_pos = self.sa_kpos_proj(k)
+            v = self.sa_v_proj(tgt)
+            q = q_content + q_pos
+            k = k_content + k_pos
+            
+            q = q.transpose(0, 1)
+            k = k.transpose(0, 1)
+            v = tgt.transpose(0, 1)
+            num_queries = q.shape[0]
+        
+            if self.training:
+                num_noise = num_queries-self.group_num * 50
+                num_queries = self.group_num * 50
+                q_noise = q[:num_noise].repeat(1,self.group_num, 1)
+                k_noise = k[:num_noise].repeat(1,self.group_num, 1)
+                v_noise = v[:num_noise].repeat(1,self.group_num, 1)
+                q = q[num_noise:]
+                k = k[num_noise:]
+                v = v[num_noise:]
+                q = torch.cat(q.split(num_queries // self.group_num, dim=0), dim=1)
+                k = torch.cat(k.split(num_queries // self.group_num, dim=0), dim=1)
+                v = torch.cat(v.split(num_queries // self.group_num, dim=0), dim=1)
+                q = torch.cat([q_noise,q], dim=0)
+                k = torch.cat([k_noise,k], dim=0)
+                v = torch.cat([v_noise,v], dim=0)
+            
+            tgt2 = self.self_attn(q, k, v)[0]
+            if self.training:
+                tgt2 = torch.cat(tgt2.split(bs, dim=1), dim=0).transpose(0, 1)
+                
+            else:
+                tgt2 = tgt2.transpose(0, 1)
+            tgt = tgt + self.dropout2(tgt2)
+            tgt = self.norm2(tgt)
       
         
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, query_pos),
@@ -657,4 +665,5 @@ def build_depthaware_transformer(cfg):
         two_stage=cfg['two_stage'],
         two_stage_num_proposals=cfg['num_queries'],
         use_dab= cfg['use_dab'],
-        two_stage_dino = cfg['two_stage_dino'])
+        two_stage_dino = cfg['two_stage_dino'],
+        depth_guidance = cfg['depth_guidance'])

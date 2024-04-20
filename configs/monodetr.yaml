@@ -3,7 +3,7 @@ random_seed: 444
 
 dataset:
   type: &dataset_type 'KITTI'
-  root_dir: 'data/KITTIDataset'
+  root_dir: '/dtu/blackhole/08/193832/KITTIDataset'
   train_split: 'train'
   test_split: 'val'
   batch_size: 16
@@ -86,12 +86,15 @@ model:
   set_cost_class: 2
   set_cost_bbox: 5
   set_cost_giou: 2
-  set_cost_3dcenter: 10
+  set_cost_3dcenter: 10  
+  
+  # depth guidance
+  depth_guidance: True # use depth guidance or not
 
 
 optimizer:
   type: 'adamw'
-  lr: 0.0002
+  lr: 0.0004
   weight_decay: 0.0001
 
 
@@ -108,7 +111,7 @@ trainer:
   save_frequency: 1  # checkpoint save interval (in epoch)
   # resume_model: True
   # pretrain_model: path/to/ckpt
-  save_path: 'outputs/'
+  save_path: '/dtu/blackhole/08/193832/outputs_hpc5'
   save_all: False  # False for only savng the best and latest ckpts
   use_dn: False
   scalar: 5

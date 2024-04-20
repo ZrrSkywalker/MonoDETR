@@ -17,6 +17,7 @@ from lib.datasets.kitti.kitti_eval_python.eval import get_distance_eval_result
 import lib.datasets.kitti.kitti_eval_python.kitti_common as kitti
 import copy
 from .pd import PhotometricDistort
+import wandb
 
 
 class KITTI_Dataset(data.Dataset):
@@ -113,6 +114,9 @@ class KITTI_Dataset(data.Dataset):
             if category == 'Car':
                 car_moderate = mAP3d_R40
             logger.info(results_str)
+            #logger.info(results_dict)
+            wandb.log(results_dict)
+
         return car_moderate
 
     def __len__(self):

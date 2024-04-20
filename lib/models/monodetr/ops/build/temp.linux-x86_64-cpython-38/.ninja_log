@@ -1,0 +1,4 @@
+# ninja log v5
+3	7995	1712660520769110000	/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/build/temp.linux-x86_64-cpython-38/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/src/cpu/ms_deform_attn_cpu.o	f3d44e04d8127500
+3	20580	1712660533343078000	/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/build/temp.linux-x86_64-cpython-38/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/src/vision.o	b8565c1ebe7fd26a
+3	44394	1712660557221233000	/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/build/temp.linux-x86_64-cpython-38/zhome/11/1/193832/resquivel/adlcv_project/models/monoDETR/lib/models/monodetr/ops/src/cuda/ms_deform_attn_cuda.o	743f6619b30a986

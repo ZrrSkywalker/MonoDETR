@@ -16,7 +16,7 @@ class Tester(object):
         self.dataloader = dataloader
         self.max_objs = dataloader.dataset.max_objs    # max objects per images, defined in dataset
         self.class_name = dataloader.dataset.class_name
-        self.output_dir = os.path.join('./' + train_cfg['save_path'], model_name)
+        self.output_dir = os.path.join(train_cfg['save_path'], model_name)
         self.dataset_type = cfg.get('type', 'KITTI')
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logger
