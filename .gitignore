@@ -1,3 +1,17 @@
+
+# built files
+lib/models/monodetr/ops/
+
+# compiled python
+**/*.pyc
+**/*.so
+
+# logs
+logs/
+
+# outputs
+outputs/
 output/
 output*/
-logs/
+
+
