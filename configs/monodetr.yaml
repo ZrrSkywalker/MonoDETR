@@ -49,6 +49,7 @@ model:
   # Transformer
   with_box_refine: True
   rtdetr_visual_encoder: False
+  deform_attn_torch: False
   two_stage: False
   use_dab: False
   use_dn: False

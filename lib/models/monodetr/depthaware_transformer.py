@@ -86,7 +86,8 @@ class DepthAwareTransformer(nn.Module):
             use_dab=False,
             two_stage_dino=False,
             depth_guidance=True,
-            rtdetr_visual_encoder=False):
+            rtdetr_visual_encoder=False,
+            deform_attn_torch=False):
 
         super().__init__()
 
@@ -99,6 +100,7 @@ class DepthAwareTransformer(nn.Module):
         self.group_num = group_num
         self.depth_guidance = depth_guidance
         self.rtdetr_visual_encoder = rtdetr_visual_encoder
+        self.deform_attn_torch = deform_attn_torch
 
         # Visual Encoder
         if self.rtdetr_visual_encoder:
@@ -114,11 +116,13 @@ class DepthAwareTransformer(nn.Module):
                 act='silu')
         else:
             encoder_layer = VisualEncoderLayer(
-                d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points)
+                d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points,
+                deform_attn_torch=self.deform_attn_torch)
             self.encoder = VisualEncoder(encoder_layer, num_encoder_layers)
 
         decoder_layer = DepthAwareDecoderLayer(
-            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, dec_n_points, group_num=group_num, depth_guidance = self.depth_guidance)
+            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, dec_n_points, group_num=group_num,
+            depth_guidance=self.depth_guidance, deform_attn_torch=self.deform_attn_torch)
         self.decoder = DepthAwareDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec, d_model, use_dab=use_dab, two_stage_dino=two_stage_dino)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
@@ -338,11 +342,11 @@ class VisualEncoderLayer(nn.Module):
     def __init__(self,
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4):
+                 n_levels=4, n_heads=8, n_points=4, deform_attn_torch=False):
         super().__init__()
 
         # self attention
-        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points, torch_fn=deform_attn_torch)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -409,11 +413,11 @@ class VisualEncoder(nn.Module):
 class DepthAwareDecoderLayer(nn.Module):
     def __init__(self, d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4, group_num=1, depth_guidance=True):
+                 n_levels=4, n_heads=8, n_points=4, group_num=1, depth_guidance=True, deform_attn_torch=False):
         super().__init__()
 
         # cross attention
-        self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points, torch_fn=deform_attn_torch)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -685,4 +689,5 @@ def build_depthaware_transformer(cfg):
         use_dab= cfg['use_dab'],
         two_stage_dino = cfg['two_stage_dino'],
         depth_guidance = cfg['depth_guidance'],
-        rtdetr_visual_encoder=cfg['rtdetr_visual_encoder'])
+        rtdetr_visual_encoder=cfg['rtdetr_visual_encoder'],
+        deform_attn_torch=cfg['deform_attn_torch'])
