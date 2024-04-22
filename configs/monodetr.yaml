@@ -111,7 +111,7 @@ trainer:
   save_frequency: 1  # checkpoint save interval (in epoch)
   # resume_model: True
   # pretrain_model: path/to/ckpt
-  save_path: '/dtu/blackhole/08/193832/outputs_hpc5'
+  save_path: '/dtu/blackhole/08/193832'
   save_all: False  # False for only savng the best and latest ckpts
   use_dn: False
   scalar: 5
