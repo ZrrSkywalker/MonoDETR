@@ -14,6 +14,15 @@ import yaml
 import argparse
 import datetime
 
+
+import hydra
+from omegaconf import DictConfig, OmegaConf
+from hydra import utils
+from hydra.core.config_store import ConfigStore
+from hydra.utils import instantiate
+from dataclasses import dataclass
+
+
 from lib.helpers.model_helper import build_model
 from lib.helpers.dataloader_helper import build_dataloader
 from lib.helpers.optimizer_helper import build_optimizer
@@ -24,43 +33,42 @@ from lib.helpers.utils_helper import create_logger
 from lib.helpers.utils_helper import set_random_seed
 
 
-parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
-parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
-parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
-args = parser.parse_args()
+# parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
+# parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
+# parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
+# args = parser.parse_args()
+
+# Define a dataclass for each group of parameters
 
 
 
-
-
-def main():
-    assert (os.path.exists(args.config))
-    cfg = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+@hydra.main(config_path="../configs", config_name="monodetr")
+def main(cfg : DictConfig) -> None:
     set_random_seed(cfg.get('random_seed', 444))
 
-    model_name = cfg['model_name']
-    output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name)
-    os.makedirs(output_path, exist_ok=True)
-
     date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+
+    model_name = cfg['model_name'] + "_" + date_time
+    output_path = os.path.join(cfg["trainer"]['save_path'], model_name)
+    os.makedirs(output_path, exist_ok=True)
 
     log_file = os.path.join(output_path, 'train.log.%s' % date_time)
     logger = create_logger(log_file)
 
-    
-
     # ✨ W&B: setup
-    wandb_cfg = {
-        "epochs": cfg['trainer']['max_epoch'],
-        "learning_rate": cfg['optimizer']['lr'],
-        "batch_size": cfg['dataset']['batch_size'],
-        "seed": cfg.get('random_seed', 444),
-        "model": model_name,
-        "dataset": cfg['dataset']['root_dir'],
-        "optimizer": cfg['optimizer']['type'],
-        "scheduler": cfg['lr_scheduler']['type'],
-        "depth_guidance": cfg['model']['depth_guidance'],
-    }
+    # wandb_cfg = {
+    #     "epochs": cfg['trainer']['max_epoch'],
+    #     "learning_rate": cfg['optimizer']['lr'],
+    #     "batch_size": cfg['dataset']['batch_size'],
+    #     "seed": cfg.get('random_seed', 444),
+    #     "model": model_name,
+    #     "dataset": cfg['dataset']['root_dir'],
+    #     "optimizer": cfg['optimizer']['type'],
+    #     "scheduler": cfg['lr_scheduler']['type'],
+    #     "depth_guidance": cfg['model']['depth_guidance'],
+    # }
+    wandb_cfg = OmegaConf.to_container(cfg, resolve=True)
+    
     wandb.init(
         project="MonoDETR",
         entity="adlcv",
@@ -136,4 +144,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    my_main()
