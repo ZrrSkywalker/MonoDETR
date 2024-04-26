@@ -260,14 +260,15 @@ class MonoDETR(nn.Module):
                     outputs_center3d,
                     mode='bilinear',
                     align_corners=True).squeeze(1)
+                # depth average + sigma
+                depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3,
+                                        depth_reg[:, :, 1: 2]], -1)
             else:
-                depth_map = 0
+                depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1)) / 3,
+                                        depth_reg[:, :, 1: 2]], -1)
             
 
 
-            # depth average + sigma
-            depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3,
-                                    depth_reg[:, :, 1: 2]], -1)
             outputs_depths.append(depth_ave)
 
             # angles
