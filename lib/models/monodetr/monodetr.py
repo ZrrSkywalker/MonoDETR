@@ -31,7 +31,8 @@ def _get_clones(module, N):
 class MonoDETR(nn.Module):
     """ This is the MonoDETR module that performs monocualr 3D object detection """
     def __init__(self, backbone, depthaware_transformer, depth_predictor, num_classes, num_queries, num_feature_levels,
-                 aux_loss=True, with_box_refine=False, two_stage=False, init_box=False, use_dab=False, group_num=11, two_stage_dino=False):
+                 aux_loss=True, with_box_refine=False, two_stage=False, init_box=False, use_dab=False, 
+                 group_num=11, two_stage_dino=False, depth_predictor2loss = True):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -64,6 +65,7 @@ class MonoDETR(nn.Module):
         self.angle_embed = MLP(hidden_dim, hidden_dim, 24, 2)
         self.depth_embed = MLP(hidden_dim, hidden_dim, 2, 2)  # depth and deviation
         self.use_dab = use_dab
+        self.depth_predictor2loss = depth_predictor2loss
 
         if init_box == True:
             nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
@@ -251,11 +253,17 @@ class MonoDETR(nn.Module):
 
             # depth_map
             outputs_center3d = ((outputs_coord[..., :2] - 0.5) * 2).unsqueeze(2).detach()
-            depth_map = F.grid_sample(
-                weighted_depth.unsqueeze(1),
-                outputs_center3d,
-                mode='bilinear',
-                align_corners=True).squeeze(1)
+            
+            if self.depth_predictor2loss:
+                depth_map = F.grid_sample(
+                    weighted_depth.unsqueeze(1),
+                    outputs_center3d,
+                    mode='bilinear',
+                    align_corners=True).squeeze(1)
+            else:
+                depth_map = 0
+            
+
 
             # depth average + sigma
             depth_ave = torch.cat([((1. / (depth_reg[:, :, 0: 1].sigmoid() + 1e-6) - 1.) + depth_geo.unsqueeze(-1) + depth_map) / 3,
@@ -698,7 +706,9 @@ def build(cfg):
         two_stage=cfg['two_stage'],
         init_box=cfg['init_box'],
         use_dab = cfg['use_dab'],
-        two_stage_dino=cfg['two_stage_dino'])
+        group_num = cfg['group_num'],
+        two_stage_dino=cfg['two_stage_dino'],
+        depth_predictor2loss=cfg['depth_predictor2loss'])
 
     # matcher
     matcher = build_matcher(cfg)

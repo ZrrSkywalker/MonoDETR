@@ -1,9 +1,10 @@
 random_seed: 444
 
+evaluate_only: False
 
 dataset:
   type: &dataset_type 'KITTI'
-  root_dir: 'data/KITTIDataset'
+  root_dir: '/dtu/blackhole/08/193832/KITTIDataset'
   train_split: 'train'
   test_split: 'val'
   batch_size: 16
@@ -52,6 +53,7 @@ model:
   deform_attn_torch: False
   two_stage: False
   use_dab: False
+  group_num: 11
   use_dn: False
   two_stage_dino: False
   init_box: False
@@ -85,7 +87,7 @@ model:
   depth_map_loss_coef: 1
 
   # loss coeff for cuberncc losses
-  cbr_3d_loss_coef: 10
+  cbr_3d_loss_coef: 0
 
   # Matcher
   set_cost_class: 2
@@ -95,6 +97,7 @@ model:
   
   # depth guidance
   depth_guidance: True # use depth guidance or not
+  depth_predictor2loss: True # use depth predictor to guide the loss or not
 
 
 optimizer:
@@ -116,7 +119,7 @@ trainer:
   save_frequency: 1  # checkpoint save interval (in epoch)
   # resume_model: True
   # pretrain_model: path/to/ckpt
-  save_path: 'outputs/'
+  save_path: '/dtu/blackhole/08/193832'
   save_all: False  # False for only savng the best and latest ckpts
   use_dn: False
   scalar: 5
