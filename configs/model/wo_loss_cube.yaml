@@ -1,0 +1,14 @@
+bbox_loss_coef: 5
+giou_loss_coef: 2
+# 3dcenter_loss_coef: 0
+# dim_loss_coef: 0
+# angle_loss_coef: 0
+# depth_loss_coef: 0
+# depth_map_loss_coef: 0
+
+# loss coeff for cuberncc losses
+cbr_3d_loss_coef: 5
+
+
+# depth guidance
+depth_guidance: False # use depth guidance or not

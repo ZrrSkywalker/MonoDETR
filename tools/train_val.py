@@ -55,6 +55,8 @@ def main(cfg : DictConfig) -> None:
     log_file = os.path.join(output_path, 'train.log.%s' % date_time)
     logger = create_logger(log_file)
 
+    logger.info(OmegaConf.to_yaml(cfg))
+
     # ✨ W&B: setup
     # wandb_cfg = {
     #     "epochs": cfg['trainer']['max_epoch'],
@@ -68,14 +70,14 @@ def main(cfg : DictConfig) -> None:
     #     "depth_guidance": cfg['model']['depth_guidance'],
     # }
     wandb_cfg = OmegaConf.to_container(cfg, resolve=True)
-    
+
     wandb.init(
         project="MonoDETR",
         entity="adlcv",
         config=wandb_cfg,
         job_type="train",
-        name="train_" + date_time,
-        dir="./outputs",
+        name=model_name,
+        dir=output_path,
     )
     
     # build dataloader
@@ -91,7 +93,7 @@ def main(cfg : DictConfig) -> None:
     else:
         model = torch.nn.DataParallel(model, device_ids=gpu_ids).to(device)
 
-    if args.evaluate_only:
+    if cfg['evaluate_only']:
         logger.info('###################  Evaluation Only  ##################')
         tester = Tester(cfg=cfg['tester'],
                         model=model,
@@ -144,4 +146,4 @@ def main(cfg : DictConfig) -> None:
 
 
 if __name__ == '__main__':
-    my_main()
+    main()

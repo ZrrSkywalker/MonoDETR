@@ -1,4 +1,4 @@
-model:
+
   num_classes: 3
   return_intermediate_dec: True
   device: 'cuda'
