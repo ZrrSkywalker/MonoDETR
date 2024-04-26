@@ -2,8 +2,14 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
-from lib.datasets.kitti.kitti_utils import Calibration, draw_projected_box3d
 import cv2
+import sys
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+sys.path.append(ROOT_DIR)
+
+from lib.datasets.kitti.kitti_utils import Calibration_draw, draw_projected_box3d
 
        
 def compute_3d_box_cam(h, w, l, x, y, z, yaw):
@@ -41,7 +47,7 @@ def read_detection(path, is_gt=False):
 def get_data(curr_path, img_id):
     path_img = os.path.join(curr_path, '../data/image_2/%06d.png'%img_id)
 
-    calib = Calibration(os.path.join(curr_path, '../data/calib/%06d.txt'%img_id))
+    calib = Calibration_draw(os.path.join(curr_path, '../data/calib/%06d.txt'%img_id))
     ground_truth = read_detection(os.path.join(curr_path, '../data/label_2/%06d.txt'%img_id), is_gt=True)
     predicted = read_detection(os.path.join(curr_path, '../outputs/monodetr/%06d.txt'%img_id), is_gt=False)
     return calib, path_img, ground_truth, predicted
@@ -51,7 +57,7 @@ def get_data(curr_path, img_id):
 
 def plot_2d(path_img, df, gt, calib):
     """
-    
+    Plot 2D bounding boxes on the image (both ground truth and predicted boxes)
 
     """
     image = cv2.imread(path_img)
@@ -68,9 +74,25 @@ def plot_2d(path_img, df, gt, calib):
         image_dt = draw_projected_box3d(image_gt, pts_2d, color=(255,0,255), thickness=1)
 
     img_id = path_img.split('/')[-1].split('.')[0]
-    cv2.imwrite(str(img_id) + '_gt_and_pred.png', image_dt)
+    save_path = os.path.join(ROOT_DIR, 'outputs', 'monodetr')
+    print(save_path)
+    cv2.imwrite(os.path.join(save_path, f'{img_id}_2d.png'), image_dt)
 
 
+
+
+
+def transform_coordinates(points):
+    # Define the rotation matrix for a -90 degree rotation around the x-axis
+    rotation_matrix = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]])
+
+    # Apply the rotation to each point
+    transformed_points = np.dot(points, rotation_matrix)
+
+    # Mirror on x,y plane
+    transformed_points[:, 2] = -transformed_points[:, 2]
+
+    return transformed_points
 
 
 def draw_3d_box(ax, corners_3d_cam, color='b'):
@@ -87,10 +109,16 @@ def draw_3d_box(ax, corners_3d_cam, color='b'):
         [0, 4], [1, 5], [2, 6], [3, 7]   # Connections between upper and lower planes
     ]
 
+    # Currently coordinate system: z points forward, x to the right, y down
+    # Desired coordinate system: z up, x to the right, y forward
+    # Translate and rotate the points to plot in the desired coordinate system
+    corners_3d_cam = transform_coordinates(corners_3d_cam.T).T
+
     for connection in connections:
         ax.plot(*corners_3d_cam[:, connection], c=color)
 
-def plot_3d(df=None, gt=None):
+
+def plot_3d(path_img=None, df=None, gt=None):
     # Create a new 3D plot
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -118,8 +146,14 @@ def plot_3d(df=None, gt=None):
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
+    
+    # Show from a different angle
+    ax.view_init(elev=23, azim=-96)
 
     # Save the figure
+    img_id = path_img.split('/')[-1].split('.')[0]
+    save_path = os.path.join(ROOT_DIR, 'outputs', 'monodetr')
+    plt.savefig(os.path.join(save_path, f'{img_id}_3d.png'))
     plt.show()
 
 
@@ -127,9 +161,8 @@ if __name__ == '__main__':
     img_id = 8
     cur_path = os.path.dirname(os.path.realpath(__file__))
 
-
     calib, path_img, gt, df = get_data(cur_path, img_id)
 
     plot_2d(path_img, df, gt, calib)
 
-    plot_3d(df, gt)
+    plot_3d(path_img, df, gt)
