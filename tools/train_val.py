@@ -70,7 +70,6 @@ def main(cfg : DictConfig) -> None:
     #     "depth_guidance": cfg['model']['depth_guidance'],
     # }
     wandb_cfg = OmegaConf.to_container(cfg, resolve=True)
-
     wandb.init(
         project="MonoDETR",
         entity="adlcv",
@@ -146,4 +145,4 @@ def main(cfg : DictConfig) -> None:
 
 
 if __name__ == '__main__':
-    main()
+    my_main()
