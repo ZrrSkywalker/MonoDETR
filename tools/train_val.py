@@ -48,14 +48,21 @@ def main(cfg : DictConfig) -> None:
 
     date_time = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-    model_name = cfg['model_name'] + "_" + date_time
+    cfg_wandb = cfg
+    if cfg['evaluate_only']:
+        model_name = cfg['model_name']
+        cfg_wandb['model_name'] = "Val_" + model_name
+    else:
+        model_name = cfg['model_name'] + "_" + date_time
+
+
     output_path = os.path.join(cfg["trainer"]['save_path'], model_name)
     os.makedirs(output_path, exist_ok=True)
 
     log_file = os.path.join(output_path, 'train.log.%s' % date_time)
     logger = create_logger(log_file)
 
-    logger.info(OmegaConf.to_yaml(cfg))
+    logger.info(OmegaConf.to_yaml(cfg_wandb))
 
     # ✨ W&B: setup
     # wandb_cfg = {
@@ -69,13 +76,14 @@ def main(cfg : DictConfig) -> None:
     #     "scheduler": cfg['lr_scheduler']['type'],
     #     "depth_guidance": cfg['model']['depth_guidance'],
     # }
-    wandb_cfg = OmegaConf.to_container(cfg, resolve=True)
+
+    wandb_cfg = OmegaConf.to_container(cfg_wandb, resolve=True)
     wandb.init(
         project="MonoDETR",
         entity="adlcv",
         config=wandb_cfg,
         job_type="train",
-        name=model_name,
+        name=cfg_wandb['model_name'],
         dir=output_path,
     )
     

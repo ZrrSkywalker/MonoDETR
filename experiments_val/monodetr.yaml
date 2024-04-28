@@ -1,0 +1,136 @@
+random_seed: 444
+
+evaluate_only: False
+
+dataset:
+  type: &dataset_type 'KITTI'
+  root_dir: '/dtu/blackhole/08/193832/KITTIDataset'
+  train_split: 'train'
+  test_split: 'val'
+  batch_size: 16
+  use_3d_center: True
+  class_merging: False
+  use_dontcare: False
+  bbox2d_type: 'anno'  # 'proj' or 'anno'
+  meanshape: False  # use predefined anchor or not
+  writelist: ['Car']
+  clip_2d: False
+
+  aug_pd: True
+  aug_crop: True
+
+  random_flip: 0.5
+  random_crop: 0.5
+  scale: 0.05
+  shift: 0.05
+
+  depth_scale: 'normal'
+
+
+model_name: 'monodetr'
+model:
+  num_classes: 3
+  return_intermediate_dec: True
+  device: 'cuda'
+
+  # Backbone
+  backbone: 'resnet50'
+  train_backbone: True
+  num_feature_levels: 4
+  dilation: False
+  position_embedding: 'sine'  # 'sine' or 'learned'
+  masks: False
+
+  # Depth predictor
+  mode: LID
+  num_depth_bins: 80
+  depth_min: 1e-3
+  depth_max: 60.0
+
+  # Transformer
+  with_box_refine: True
+  rtdetr_visual_encoder: False
+  deform_attn_torch: False
+  two_stage: False
+  use_dab: False
+  group_num: 11
+  use_dn: False
+  two_stage_dino: False
+  init_box: False
+  enc_layers: 3
+  dec_layers: 3
+  hidden_dim: 256
+  dim_feedforward: 256
+  dropout: 0.1
+  nheads: 8
+  num_queries: 50
+  enc_n_points: 4
+  dec_n_points: 4
+  # DN
+  scalar: 5
+  label_noise_scale: 0.2
+  box_noise_scale: 0.4
+  num_patterns: 0
+  # Loss
+  aux_loss: True
+
+  # Loss coefficients
+  cls_loss_coef: 2
+  focal_alpha: 0.25
+
+  bbox_loss_coef: 5
+  giou_loss_coef: 2
+  3dcenter_loss_coef: 10
+  dim_loss_coef: 1
+  angle_loss_coef: 1
+  depth_loss_coef: 1
+  depth_map_loss_coef: 1
+
+  # loss coeff for cuberncc losses
+  cbr_3d_loss_coef: 0
+
+  # Matcher
+  set_cost_class: 2
+  set_cost_bbox: 5
+  set_cost_giou: 2
+  set_cost_3dcenter: 10  
+  
+  # depth guidance
+  depth_guidance: True # use depth guidance or not
+  depth_predictor2loss: True # use depth predictor to guide the loss or not
+
+
+optimizer:
+  type: 'adamw'
+  lr: 0.0004
+  weight_decay: 0.0001
+
+
+lr_scheduler:
+  type: 'step'  # 'step' or 'cos'
+  warmup: False  # 5 epoches, cosine warmup, init_lir=0.00001 in default
+  decay_rate: 0.1
+  decay_list: [125, 165]
+
+
+trainer:
+  max_epoch: 195
+  gpu_ids: '1'
+  save_frequency: 1  # checkpoint save interval (in epoch)
+  # resume_model: True
+  # pretrain_model: path/to/ckpt
+  save_path: '/dtu/blackhole/08/193832'
+  save_all: False  # False for only savng the best and latest ckpts
+  use_dn: False
+  scalar: 5
+  label_noise_scale: 0.2
+  box_noise_scale: 0.4
+  num_patterns: 0
+
+tester:
+  type: *dataset_type
+  mode: single  # 'single' or 'all'; 'all' to evaluate all ckpts in the folder
+  profile: False # profile the inference time and flops or not
+  checkpoint: 195  # the start ckpt epoch for 'all'
+  threshold: 0.2  # confidence filter
+  topk: 50

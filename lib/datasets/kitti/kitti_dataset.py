@@ -39,6 +39,7 @@ class KITTI_Dataset(data.Dataset):
         self.meanshape = cfg.get('meanshape', False)
         self.class_merging = cfg.get('class_merging', False)
         self.use_dontcare = cfg.get('use_dontcare', False)
+        self.evaluate_only = cfg.get('evaluate_only', False)
 
         if self.class_merging:
             self.writelist.extend(['Van', 'Truck'])
@@ -114,8 +115,16 @@ class KITTI_Dataset(data.Dataset):
             if category == 'Car':
                 car_moderate = mAP3d_R40
             logger.info(results_str)
-            #logger.info(results_dict)
-            wandb.log(results_dict)
+
+            if self.evaluate_only:
+                rows = [dict(name=k, value=v) for k, v in results_str.items()]
+                table = wandb.Table(data=rows, columns=["name", "value"])
+                wandb.log({"detr_losses": table})
+            else:
+                #logger.info(results_dict)
+                wandb.log(results_dict)
+
+
 
         return car_moderate
 
