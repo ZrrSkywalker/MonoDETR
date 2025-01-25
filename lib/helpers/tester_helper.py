@@ -8,6 +8,12 @@ from lib.helpers.decode_helper import extract_dets_from_outputs
 from lib.helpers.decode_helper import decode_detections
 import time
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+from lib.helpers.save_helper import load_checkpoint
+from lib.helpers.decode_helper import extract_dets_from_outputs
+from lib.helpers.decode_helper import decode_detections
+
 
 class Tester(object):
     def __init__(self, cfg, model, dataloader, logger, train_cfg=None, model_name='monodetr'):
@@ -32,7 +38,7 @@ class Tester(object):
                 checkpoint_path = os.path.join(self.output_dir, "checkpoint_epoch_{}.pth".format(self.cfg['checkpoint']))
             else:
                 checkpoint_path = os.path.join(self.output_dir, "checkpoint_best.pth")
-            assert os.path.exists(checkpoint_path)
+            assert os.path.exists(checkpoint_path), f'{checkpoint_path}'
             load_checkpoint(model=self.model,
                             optimizer=None,
                             filename=checkpoint_path,
@@ -108,6 +114,9 @@ class Tester(object):
         # save the result for evaluation.
         self.logger.info('==> Saving ...')
         self.save_results(results)
+        # Save plotted results
+        self.save_results_plot(results)
+
 
     def save_results(self, results):
         output_dir = os.path.join(self.output_dir, 'outputs', 'data')
@@ -130,6 +139,47 @@ class Tester(object):
                     f.write(' {:.2f}'.format(results[img_id][i][j]))
                 f.write('\n')
             f.close()
+            
+    def save_results_plot(self, results):
+        """
+        Save plots of detection results on images.
+        Args:
+            results: Dictionary of detections, keyed by image ID.
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        output_dir = os.path.join(self.output_dir, 'outputs', 'plots')
+        os.makedirs(output_dir, exist_ok=True)
+
+        for img_id, detections in results.items():
+            # Fetch the original image
+            img = self.dataloader.dataset.get_image(img_id)
+            if img is None:
+                continue
+
+            fig, ax = plt.subplots(1, figsize=(12, 8))
+            ax.imshow(img)
+
+            for det in detections:
+                class_name = self.class_name[int(det[0])]
+                x_min, y_min, x_max, y_max = det[2:6]  # Extract 2D bounding box coordinates
+                score = det[-1]  # Extract the detection score
+
+                # Add bounding box
+                rect = patches.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min,
+                                         linewidth=2, edgecolor='red', facecolor='none')
+                ax.add_patch(rect)
+
+                # Add label
+                label = f"{class_name} ({score:.2f})"
+                ax.text(x_min, y_min - 5, label, color='yellow', fontsize=10,
+                        bbox=dict(facecolor='black', alpha=0.5, edgecolor='none'))
+
+            plt.axis('off')
+            output_path = os.path.join(output_dir, '{:06d}.png'.format(img_id))
+            plt.savefig(output_path, bbox_inches='tight', pad_inches=0)
+            plt.close(fig)
+
 
     def evaluate(self):
         results_dir = os.path.join(self.output_dir, 'outputs', 'data')
