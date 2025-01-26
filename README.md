@@ -120,6 +120,11 @@ New and better results in this repo:
     ├──...
     ```
     You can also change the data path at "dataset/root_dir" in `configs/monodetr.yaml`.
+
+6. (Optional) Check CUDA versions used by pytorch and installed locally:
+    ```
+    python check_cuda.py
+    ```
     
 ## Get Started
 
