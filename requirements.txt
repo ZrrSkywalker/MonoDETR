@@ -5,3 +5,4 @@ numba
 scikit-image
 tqdm
 matplotlib
+pynvml
