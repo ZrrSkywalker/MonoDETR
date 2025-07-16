@@ -5,7 +5,7 @@ dataset:
   type: &dataset_type 'KITTI'
   root_dir: 'data/KITTIDataset'
   train_split: 'train'
-  test_split: 'val'
+  test_split: 'test'
   batch_size: 16
   use_3d_center: True
   class_merging: False

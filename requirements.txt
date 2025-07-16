@@ -4,3 +4,5 @@ opencv-python
 numba
 scikit-image
 tqdm
+matplotlib
+pynvml

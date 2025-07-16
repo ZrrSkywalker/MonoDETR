@@ -87,8 +87,11 @@ New and better results in this repo:
     
 2. Install pytorch and torchvision matching your CUDA version:
     ```bash
-    conda install pytorch torchvision cudatoolkit
-    # We adopt torch 1.9.0+cu111
+    conda install pytorch==1.10.0 torchvision==0.11.0 cudatoolkit=11.3 -c pytorch -c conda-forge
+    # We adopt torch 1.10.0+cu113
+
+    export PATH=/usr/local/cuda-11.3/bin:$PATH
+    export LD_LIBRARY_PATH=/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH
     ```
     
 3. Install requirements and compile the deformable attention:
@@ -117,6 +120,11 @@ New and better results in this repo:
     ├──...
     ```
     You can also change the data path at "dataset/root_dir" in `configs/monodetr.yaml`.
+
+6. (Optional) Check CUDA versions used by pytorch and installed locally:
+    ```
+    python check_cuda.py
+    ```
     
 ## Get Started
 
