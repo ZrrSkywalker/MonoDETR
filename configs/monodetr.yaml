@@ -33,6 +33,9 @@ model:
   device: 'cuda'
 
   # Backbone
+  # Options:
+  #   ResNet family : 'resnet50' (default)
+  #   DINOv3 ConvNeXt: 'convnext_tiny.dinov3_lvd1689m'
   backbone: 'resnet50'
   train_backbone: True
   num_feature_levels: 4

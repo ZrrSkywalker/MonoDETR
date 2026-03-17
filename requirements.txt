@@ -4,3 +4,6 @@ opencv-python
 numba
 scikit-image
 tqdm
+typer
+timm
+tensorboard

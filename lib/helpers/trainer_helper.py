@@ -4,6 +4,7 @@ import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 
 from lib.helpers.save_helper import get_checkpoint_state
 from lib.helpers.save_helper import load_checkpoint
@@ -41,6 +42,10 @@ class Trainer(object):
         self.output_dir = os.path.join('./' + cfg['save_path'], model_name, cfg.get('timestamp', ''))
         self.tester = None
 
+        # TensorBoard writer — logs live in <output_dir>/tensorboard/
+        tb_dir = os.path.join(self.output_dir, 'tensorboard')
+        os.makedirs(tb_dir, exist_ok=True)
+        self.tb_writer = SummaryWriter(log_dir=tb_dir)
         # loading pretrain/resume model
         if cfg.get('pretrain_model'):
             assert os.path.exists(cfg['pretrain_model'])
@@ -82,6 +87,10 @@ class Trainer(object):
             else:
                 self.lr_scheduler.step()
 
+            # log learning rate
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.tb_writer.add_scalar('train/lr', current_lr, self.epoch)
+
             # save trained model
             if (self.epoch % self.cfg['save_frequency']) == 0:
                 os.makedirs(self.output_dir, exist_ok=True)
@@ -98,6 +107,7 @@ class Trainer(object):
                     self.logger.info("Test Epoch {}".format(self.epoch))
                     self.tester.inference()
                     cur_result = self.tester.evaluate()
+                    self.tb_writer.add_scalar('eval/metric', cur_result, self.epoch)
                     if cur_result > best_result:
                         best_result = cur_result
                         best_epoch = self.epoch
@@ -110,7 +120,7 @@ class Trainer(object):
             progress_bar.update()
 
         self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
-
+        self.tb_writer.close()
         return None
 
     def train_one_epoch(self, epoch):
@@ -150,6 +160,13 @@ class Trainer(object):
                     detr_losses_dict_log[k] = (detr_losses_dict[k] * weight_dict[k]).item()
                     detr_losses_log += detr_losses_dict_log[k]
             detr_losses_dict_log["loss_detr"] = detr_losses_log
+
+            # TensorBoard: log all losses every step
+            global_step = epoch * len(self.train_loader) + batch_idx
+            self.tb_writer.add_scalar('train/loss_total', detr_losses_dict_log['loss_detr'], global_step)
+            for k, v in detr_losses_dict_log.items():
+                if k != 'loss_detr':
+                    self.tb_writer.add_scalar(f'train/losses/{k}', v, global_step)
 
             flags = [True] * 5
             if batch_idx % 30 == 0:

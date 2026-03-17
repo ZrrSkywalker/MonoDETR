@@ -23,15 +23,17 @@ from lib.helpers.utils_helper import create_logger
 from lib.helpers.utils_helper import set_random_seed
 
 
-parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
-parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
-parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
-args = parser.parse_args()
-
-
 def main():
-    assert (os.path.exists(args.config))
-    cfg = yaml.load(open(args.config, 'r'), Loader=yaml.Loader)
+    parser = argparse.ArgumentParser(description='Depth-aware Transformer for Monocular 3D Object Detection')
+    parser.add_argument('--config', dest='config', help='settings of detection in yaml format')
+    parser.add_argument('-e', '--evaluate_only', action='store_true', default=False, help='evaluation only')
+    args = parser.parse_args()
+    run(config=args.config, evaluate_only=args.evaluate_only)
+
+
+def run(config: str, evaluate_only: bool = False):
+    assert (os.path.exists(config))
+    cfg = yaml.load(open(config, 'r'), Loader=yaml.Loader)
     set_random_seed(cfg.get('random_seed', 444))
 
     model_name = cfg['model_name']
@@ -56,7 +58,7 @@ def main():
     else:
         model = torch.nn.DataParallel(model, device_ids=gpu_ids).to(device)
 
-    if args.evaluate_only:
+    if evaluate_only:
         logger.info('###################  Evaluation Only  ##################')
         tester = Tester(cfg=cfg['tester'],
                         model=model,
