@@ -10,18 +10,21 @@ import time
 
 
 class Tester(object):
-    def __init__(self, cfg, model, dataloader, logger, train_cfg=None, model_name='monodetr'):
+    def __init__(self, cfg, model, dataloader, logger, train_cfg=None, model_name='monodetr',
+                 tb_writer=None):
         self.cfg = cfg
         self.model = model
         self.dataloader = dataloader
         self.max_objs = dataloader.dataset.max_objs    # max objects per images, defined in dataset
         self.class_name = dataloader.dataset.class_name
-        self.output_dir = os.path.join('./' + train_cfg['save_path'], model_name, train_cfg.get('timestamp', ''))
+        self.output_dir = os.path.join('./' + train_cfg['save_path'], model_name,
+                                       train_cfg.get('run_dir', ''))
         self.dataset_type = cfg.get('type', 'KITTI')
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logger
         self.train_cfg = train_cfg
         self.model_name = model_name
+        self.tb_writer = tb_writer
 
     def test(self):
         assert self.cfg['mode'] in ['single', 'all']
@@ -104,6 +107,8 @@ class Tester(object):
             len(self.dataloader), model_infer_time / len(self.dataloader)))
 
         progress_bar.close()
+        self.logger.info('inference on {} images, {:.4f}s per image'.format(
+            len(self.dataloader), model_infer_time / len(self.dataloader)))
 
         # save the result for evaluation.
         self.logger.info('==> Saving ...')
@@ -136,3 +141,47 @@ class Tester(object):
         assert os.path.exists(results_dir)
         result = self.dataloader.dataset.eval(results_dir=results_dir, logger=self.logger)
         return result
+
+    def visualize(self, epoch: int) -> None:
+        """Run a single test batch through the model and log TensorBoard visualisations.
+
+        Logs two panels:
+          - ``vis/detections``  : input images with predicted 2-D bbox overlays
+          - ``vis/depth_attn``  : A_D heatmaps (depth cross-attention from the
+            last decoder layer) blended onto the input images, matching
+            Figure 6 of the MonoDETR paper.
+        """
+        if self.tb_writer is None:
+            return
+
+        from lib.helpers.vis_helper import log_detection_images, log_depth_attn_maps
+
+        batch_iter = iter(self.dataloader)
+        inputs, calibs, targets, info = next(batch_iter)
+        inputs   = inputs.to(self.device)
+        calibs   = calibs.to(self.device)
+        img_sizes = info['img_size'].to(self.device)
+
+        n_vis = self.train_cfg.get('vis_n_images', 4)
+
+        # ------------------------------------------------------------------ #
+        # Detection overlay — use a plain forward pass (no hooks)             #
+        # ------------------------------------------------------------------ #
+        self.model.eval()
+        with torch.no_grad():
+            outputs = self.model(inputs, calibs, targets, img_sizes, dn_args=0)
+
+        log_detection_images(
+            self.tb_writer, 'vis/detections',
+            inputs, outputs, img_sizes, self.class_name,
+            epoch, n=n_vis,
+        )
+
+        # ------------------------------------------------------------------ #
+        # Depth cross-attention maps (A_D) — uses a forward hook              #
+        # ------------------------------------------------------------------ #
+        log_depth_attn_maps(
+            self.tb_writer, 'vis/depth_attn',
+            self.model, inputs, calibs, targets, img_sizes,
+            epoch, n=n_vis,
+        )

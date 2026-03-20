@@ -105,19 +105,22 @@ class Trainer(object):
                         get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
                         ckpt_name)
 
-                    if self.tester is not None:
-                        self.logger.info("Test Epoch {}".format(self.epoch))
-                        self.tester.inference()
-                        cur_result = self.tester.evaluate()
-                        self.tb_writer.add_scalar('eval/metric', cur_result, self.epoch)
-                        if cur_result > best_result:
-                            best_result = cur_result
-                            best_epoch = self.epoch
-                            ckpt_name = os.path.join(self.output_dir, 'checkpoint_best')
-                            save_checkpoint(
-                                get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
-                                ckpt_name)
-                        self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
+                # run evaluation every eval_frequency epochs (decoupled from saves)
+                eval_freq = self.cfg.get('eval_frequency', self.cfg['save_frequency'])
+                if self.tester is not None and (self.epoch % eval_freq) == 0:
+                    self.logger.info("Test Epoch {}".format(self.epoch))
+                    self.tester.inference()
+                    cur_result = self.tester.evaluate()
+                    self.tb_writer.add_scalar('eval/metric', cur_result, self.epoch)
+                    if cur_result > best_result:
+                        best_result = cur_result
+                        best_epoch = self.epoch
+                        ckpt_name = os.path.join(self.output_dir, 'checkpoint_best')
+                        save_checkpoint(
+                            get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
+                            ckpt_name)
+                    self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
+                    self.tester.visualize(self.epoch)
 
                 progress_bar.update()
 

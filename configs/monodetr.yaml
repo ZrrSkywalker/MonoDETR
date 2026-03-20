@@ -108,7 +108,9 @@ lr_scheduler:
 trainer:
   max_epoch: 195
   gpu_ids: '1'
-  save_frequency: 1  # checkpoint save interval (in epoch)
+  save_frequency: 5       # checkpoint save interval (epochs)
+  eval_frequency: 10      # run test evaluation every N epochs
+  vis_n_images: 4         # images to show in TensorBoard detection/attn panels
   # resume_model: True
   # pretrain_model: path/to/ckpt
   save_path: 'outputs/'

@@ -96,7 +96,8 @@ def run(config: str, evaluate_only: bool = False, gpu_ids: str = None):
                     dataloader=test_loader,
                     logger=logger,
                     train_cfg=cfg['trainer'],
-                    model_name=model_name)
+                    model_name=model_name,
+                    tb_writer=trainer.tb_writer)
     if cfg['dataset']['test_split'] != 'test':
         trainer.tester = tester
 
