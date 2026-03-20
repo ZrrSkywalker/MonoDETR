@@ -34,9 +34,17 @@ model:
 
   # Backbone
   # Options:
-  #   ResNet family : 'resnet50' (default)
-  #   DINOv3 ConvNeXt: 'convnext_tiny.dinov3_lvd1689m'
-  backbone: 'convnext_tiny.dinov3_lvd1689m'
+  #   ResNet family      : 'resnet50' (default)
+  #   DINOv3 ConvNeXt (channels @ strides 8/16/32):
+  #     tiny  : 'convnext_tiny.dinov3_lvd1689m'   [192, 384,  768]
+  #     small : 'convnext_small.dinov3_lvd1689m'  [192, 384,  768]  (deeper)
+  #     base  : 'convnext_base.dinov3_lvd1689m'   [256, 512, 1024]
+  #     large : 'convnext_large.dinov3_lvd1689m'  [384, 768, 1536]
+  #   DINOv3 ViT (Simple-FPN gives [C,C,C] @ strides 8/16/32):
+  #     small+: 'vit_small_plus_patch16_dinov3.lvd1689m'  [384, 384, 384]
+  #     base  : 'vit_base_patch16_dinov3.lvd1689m'        [768, 768, 768]
+  #     large : 'vit_large_patch16_dinov3.lvd1689m'       [1024,1024,1024]
+  backbone: 'vit_base_patch16_dinov3.lvd1689m'
   train_backbone: True
   num_feature_levels: 4
   dilation: False

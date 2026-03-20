@@ -1,5 +1,6 @@
 import os
 import tqdm
+import tqdm.contrib.logging
 
 import torch
 import numpy as np
@@ -39,7 +40,7 @@ class Trainer(object):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.detr_loss = loss
         self.model_name = model_name
-        self.output_dir = os.path.join('./' + cfg['save_path'], model_name, cfg.get('timestamp', ''))
+        self.output_dir = os.path.join('./' + cfg['save_path'], model_name, cfg.get('run_dir', ''))
         self.tester = None
 
         # TensorBoard writer — logs live in <output_dir>/tensorboard/
@@ -73,51 +74,52 @@ class Trainer(object):
         progress_bar = tqdm.tqdm(range(start_epoch, self.cfg['max_epoch']), dynamic_ncols=True, leave=True, desc='epochs')
         best_result = self.best_result
         best_epoch = self.best_epoch
-        for epoch in range(start_epoch, self.cfg['max_epoch']):
-            # reset random seed
-            # ref: https://github.com/pytorch/pytorch/issues/5059
-            np.random.seed(np.random.get_state()[1][0] + epoch)
-            # train one epoch
-            self.train_one_epoch(epoch)
-            self.epoch += 1
+        with tqdm.contrib.logging.logging_redirect_tqdm():
+            for epoch in range(start_epoch, self.cfg['max_epoch']):
+                # reset random seed
+                # ref: https://github.com/pytorch/pytorch/issues/5059
+                np.random.seed(np.random.get_state()[1][0] + epoch)
+                # train one epoch
+                self.train_one_epoch(epoch)
+                self.epoch += 1
 
-            # update learning rate
-            if self.warmup_lr_scheduler is not None and epoch < 5:
-                self.warmup_lr_scheduler.step()
-            else:
-                self.lr_scheduler.step()
-
-            # log learning rate
-            current_lr = self.optimizer.param_groups[0]['lr']
-            self.tb_writer.add_scalar('train/lr', current_lr, self.epoch)
-
-            # save trained model
-            if (self.epoch % self.cfg['save_frequency']) == 0:
-                os.makedirs(self.output_dir, exist_ok=True)
-                if self.cfg['save_all']:
-                    ckpt_name = os.path.join(self.output_dir, 'checkpoint_epoch_%d' % self.epoch)
+                # update learning rate
+                if self.warmup_lr_scheduler is not None and epoch < 5:
+                    self.warmup_lr_scheduler.step()
                 else:
-                    ckpt_name = os.path.join(self.output_dir, 'checkpoint')
-               
-                save_checkpoint(
-                    get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
-                    ckpt_name)
+                    self.lr_scheduler.step()
 
-                if self.tester is not None:
-                    self.logger.info("Test Epoch {}".format(self.epoch))
-                    self.tester.inference()
-                    cur_result = self.tester.evaluate()
-                    self.tb_writer.add_scalar('eval/metric', cur_result, self.epoch)
-                    if cur_result > best_result:
-                        best_result = cur_result
-                        best_epoch = self.epoch
-                        ckpt_name = os.path.join(self.output_dir, 'checkpoint_best')
-                        save_checkpoint(
-                            get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
-                            ckpt_name)
-                    self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
+                # log learning rate
+                current_lr = self.optimizer.param_groups[0]['lr']
+                self.tb_writer.add_scalar('train/lr', current_lr, self.epoch)
 
-            progress_bar.update()
+                # save trained model
+                if (self.epoch % self.cfg['save_frequency']) == 0:
+                    os.makedirs(self.output_dir, exist_ok=True)
+                    if self.cfg['save_all']:
+                        ckpt_name = os.path.join(self.output_dir, 'checkpoint_epoch_%d' % self.epoch)
+                    else:
+                        ckpt_name = os.path.join(self.output_dir, 'checkpoint')
+
+                    save_checkpoint(
+                        get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
+                        ckpt_name)
+
+                    if self.tester is not None:
+                        self.logger.info("Test Epoch {}".format(self.epoch))
+                        self.tester.inference()
+                        cur_result = self.tester.evaluate()
+                        self.tb_writer.add_scalar('eval/metric', cur_result, self.epoch)
+                        if cur_result > best_result:
+                            best_result = cur_result
+                            best_epoch = self.epoch
+                            ckpt_name = os.path.join(self.output_dir, 'checkpoint_best')
+                            save_checkpoint(
+                                get_checkpoint_state(self.model, self.optimizer, self.epoch, best_result, best_epoch),
+                                ckpt_name)
+                        self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
+
+                progress_bar.update()
 
         self.logger.info("Best Result:{}, epoch:{}".format(best_result, best_epoch))
         self.tb_writer.close()
@@ -126,7 +128,7 @@ class Trainer(object):
     def train_one_epoch(self, epoch):
         torch.set_grad_enabled(True)
         self.model.train()
-        print(">>>>>>> Epoch:", str(epoch) + ":")
+        self.logger.info(">>>>>>> Epoch %d:", epoch)
 
         progress_bar = tqdm.tqdm(total=len(self.train_loader), leave=(self.epoch+1 == self.cfg['max_epoch']), desc='iters')
         for batch_idx, (inputs, calibs, targets, info) in enumerate(self.train_loader):
@@ -168,20 +170,13 @@ class Trainer(object):
                 if k != 'loss_detr':
                     self.tb_writer.add_scalar(f'train/losses/{k}', v, global_step)
 
-            flags = [True] * 5
             if batch_idx % 30 == 0:
-                print("----", batch_idx, "----")
-                print("%s: %.2f, " %("loss_detr", detr_losses_dict_log["loss_detr"]))
+                parts = ["---- batch %d ----" % batch_idx,
+                         "loss_detr: %.2f" % detr_losses_dict_log["loss_detr"]]
                 for key, val in detr_losses_dict_log.items():
-                    if key == "loss_detr":
-                        continue
-                    if "0" in key or "1" in key or "2" in key or "3" in key or "4" in key or "5" in key:
-                        if flags[int(key[-1])]:
-                            print("")
-                            flags[int(key[-1])] = False
-                    print("%s: %.2f, " %(key, val), end="")
-                print("")
-                print("")
+                    if key != "loss_detr":
+                        parts.append("%s: %.2f" % (key, val))
+                self.logger.info(", ".join(parts))
 
             detr_losses.backward()
             self.optimizer.step()

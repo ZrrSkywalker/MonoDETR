@@ -153,6 +153,63 @@ class DINOv3Backbone(nn.Module):
         return out
 
 
+class ViTDINOv3Backbone(nn.Module):
+    """ViT backbone pretrained with DINOv3, loaded via timm.
+
+    ViT produces a single spatial scale (stride 16).  A lightweight Simple-FPN
+    (He et al., ViTDet 2022) adds a 2× upsample branch (→ stride 8) and a 2×
+    strided-conv branch (→ stride 32) so the rest of MonoDETR sees the same
+    three-level contract as the ConvNeXt/ResNet backbones.
+
+    Args:
+        model_name: timm model identifier, e.g.
+            'vit_small_plus_patch16_dinov3.lvd1689m'.
+        train_backbone: if True, transformer blocks are trainable; patch_embed
+            is always frozen.
+    """
+
+    strides: List[int]
+    num_channels: List[int]
+
+    def __init__(self, model_name: str, train_backbone: bool):
+        super().__init__()
+        # Take only the last transformer block output (deepest representation).
+        self.body = timm.create_model(
+            model_name,
+            pretrained=is_main_process(),
+            features_only=True,
+            out_indices=(-1,),
+        )
+        embed_dim: int = self.body.feature_info.channels()[-1]
+
+        # Simple FPN: three projection heads from the single stride-16 feature.
+        self.proj_up = nn.Sequential(
+            nn.Conv2d(embed_dim, embed_dim, 1),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+        )  # → stride 8
+        self.proj_mid = nn.Conv2d(embed_dim, embed_dim, 1)  # → stride 16
+        self.proj_down = nn.Conv2d(embed_dim, embed_dim, 3, stride=2, padding=1)  # → stride 32
+
+        self.strides = [8, 16, 32]
+        self.num_channels = [embed_dim, embed_dim, embed_dim]
+
+        # patch_embed is always frozen; blocks follow train_backbone flag.
+        for name, param in self.body.named_parameters():
+            param.requires_grad_(train_backbone and not name.startswith('patch_embed'))
+
+    def forward(self, images: torch.Tensor) -> Dict[str, NestedTensor]:
+        feat = self.body(images)[0]  # (B, C, H/16, W/16)
+        levels = [self.proj_up(feat), self.proj_mid(feat), self.proj_down(feat)]
+        out: Dict[str, NestedTensor] = {}
+        for i, x in enumerate(levels):
+            mask = torch.zeros(
+                x.shape[0], x.shape[2], x.shape[3],
+                dtype=torch.bool, device=x.device,
+            )
+            out[str(i)] = NestedTensor(x, mask)
+        return out
+
+
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
         super().__init__(backbone, position_embedding)
@@ -177,7 +234,9 @@ def build_backbone(cfg):
     position_embedding = build_position_encoding(cfg)
     backbone_name = cfg['backbone']
 
-    if backbone_name.startswith('convnext') or 'dinov3' in backbone_name:
+    if backbone_name.startswith('vit_') and ('dinov3' in backbone_name or 'dinov2' in backbone_name):
+        backbone = ViTDINOv3Backbone(backbone_name, cfg['train_backbone'])
+    elif backbone_name.startswith('convnext'):
         backbone = DINOv3Backbone(backbone_name, cfg['train_backbone'])
     else:
         return_interm_layers = cfg['masks'] or cfg['num_feature_levels'] > 1

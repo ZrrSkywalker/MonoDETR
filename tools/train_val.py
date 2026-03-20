@@ -31,19 +31,25 @@ def main():
     run(config=args.config, evaluate_only=args.evaluate_only)
 
 
-def run(config: str, evaluate_only: bool = False):
+def run(config: str, evaluate_only: bool = False, gpu_ids: str = None):
     assert (os.path.exists(config))
     cfg = yaml.load(open(config, 'r'), Loader=yaml.Loader)
     set_random_seed(cfg.get('random_seed', 444))
 
     model_name = cfg['model_name']
+    backbone_name = cfg['model']['backbone'].replace('.', '_').replace('/', '_')
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    cfg['trainer']['timestamp'] = timestamp
-    output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name, timestamp)
+    run_dir = '%s_%s' % (timestamp, backbone_name)
+    cfg['trainer']['run_dir'] = run_dir
+    output_path = os.path.join('./' + cfg["trainer"]['save_path'], model_name, run_dir)
     os.makedirs(output_path, exist_ok=True)
 
-    log_file = os.path.join(output_path, 'train.log.%s' % timestamp)
+    log_file = os.path.join(output_path, 'train.log')
     logger = create_logger(log_file)
+
+    # Allow gpu_ids to be overridden from the command line (main.py --cuda)
+    if gpu_ids is not None:
+        cfg['trainer']['gpu_ids'] = gpu_ids
 
     # build dataloader
     train_loader, test_loader = build_dataloader(cfg['dataset'])
